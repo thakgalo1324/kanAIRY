@@ -11,7 +11,9 @@ class _Url:
         u = urlsplit(url); self.path = u.path
         self.params = dict(parse_qsl(u.query)); self.params.update({k: str(v) for k, v in (params or {}).items()})
 class Request:
-    def __init__(self, url, params, headers): self.url = _Url(url, params); self.headers = {k.lower(): v for k, v in (headers or {}).items()}
+    def __init__(self, url, params, headers, method="GET", json=None):
+        self.url = _Url(url, params); self.headers = {k.lower(): v for k, v in (headers or {}).items()}
+        self.method = method; self.content = _json.dumps(json).encode() if json is not None else b""
 class Response:
     def __init__(self, status_code, json=None, text=None):
         self.status_code = status_code
@@ -25,6 +27,8 @@ class AsyncClient:
     def __init__(self, *a, transport=None, **k): self.transport = transport
     async def get(self, url, params=None, headers=None):
         return self.transport.handler(Request(url, params, headers))
+    async def request(self, method, url, params=None, json=None, headers=None):
+        return self.transport.handler(Request(url, params, headers, method, json))
 for n, v in dict(HTTPError=HTTPError, TimeoutException=TimeoutException, ReadTimeout=ReadTimeout, Request=Request,
                  Response=Response, MockTransport=MockTransport, AsyncClient=AsyncClient).items(): setattr(m, n, v)
 sys.modules["httpx"] = m
