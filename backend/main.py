@@ -1,7 +1,7 @@
 """KanAIRY Trading API.
 
-Serves the web app and a JSON API in front of a broker gateway (MetaRPC or
-MetaApi, chosen by BROKER_PROVIDER) plus public market data, news and the
+Serves the web app and a JSON API in front of an optional MetaApi
+broker gateway plus public market data, news and the
 economic calendar. Every account/trading route requires a signed session token.
 """
 import asyncio
@@ -28,8 +28,6 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 import auth  # noqa: E402
 from broker_manager import ApiError, BrokerManager, explain_error  # noqa: E402
-from bridge_manager import BridgeManager  # noqa: E402
-from mrpc_manager import BUILD as MRPC_BUILD, DIAG as MRPC_DIAG, INSTANCE as MRPC_INSTANCE, MrpcManager  # noqa: E402
 from models import ClosePositionRequest, ConnectRequest, ModifyRequest, OrderRequest  # noqa: E402
 from public_data import BY_SYMBOL, CATALOG, PublicData, PublicError  # noqa: E402
 
@@ -64,39 +62,14 @@ if os.getenv("TRUST_PROXY", "").strip().lower() in ("1", "true", "yes") or os.ge
 public = PublicData()
 manager: Optional[BrokerManager] = None
 _metaapi_token = os.getenv("METAAPI_TOKEN", "").strip()
-_mrpc_key = os.getenv("MRPC_API_KEY", "").strip()
-_bridge_url = os.getenv("BRIDGE_URL", "").strip()
-_bridge_key = os.getenv("BRIDGE_API_KEY", "").strip()
-_bridge_pw = os.getenv("BRIDGE_ACCESS_PASSWORD", "").strip()
-# BROKER_PROVIDER picks the gateway: metarpc, metaapi or bridge. Unset: bridge if BRIDGE_URL is set, else MetaRPC when
-# its key is set, else MetaApi.
-PROVIDER = (os.getenv("BROKER_PROVIDER") or ("bridge" if _bridge_url else "metarpc" if _mrpc_key else "metaapi")).strip().lower()
-IDLE_SECONDS = int(os.getenv("MRPC_IDLE_SECONDS", "600") or 600)
-
-
-async def _catalog_symbols():
-    """Symbol list for MetaRPC mode: MetaRPC has no cheap 'list all symbols' call, so use the app's own catalogue."""
-    return [{"symbol": c["symbol"], "description": c["name"], "category": c["cat"], "digits": c["digits"], "path": ""} for c in CATALOG]
 
 
 def get_manager() -> BrokerManager:
     global manager
     if manager is None:
-        if PROVIDER == "bridge":
-            if not (_bridge_url and _bridge_key):
-                raise ApiError(503, "Broker access is not configured. Set BRIDGE_URL and BRIDGE_API_KEY on the server.", "not_configured")
-            if len(_bridge_pw) < 12:
-                raise ApiError(503, "Set BRIDGE_ACCESS_PASSWORD (12+ characters) on the server: it decides who may use this app.", "not_configured")
-            manager = BridgeManager(_bridge_url, _bridge_key, _bridge_pw)
-        elif PROVIDER == "metarpc":
-            if not _mrpc_key:
-                raise ApiError(503, "Broker access is not configured. Set MRPC_API_KEY on the server.", "not_configured")
-            manager = MrpcManager(_mrpc_key, idle_seconds=IDLE_SECONDS, fallback_candles=public.candles,
-                                  fallback_symbols=_catalog_symbols)
-        else:
-            if not _metaapi_token:
-                raise ApiError(503, "Broker access is not configured. Set METAAPI_TOKEN on the server.", "not_configured")
-            manager = BrokerManager(_metaapi_token)
+        if not _metaapi_token:
+            raise ApiError(503, "The built-in broker connection is not set up on this server (METAAPI_TOKEN). Trade in the MT5 Web terminal instead.", "not_configured")
+        manager = BrokerManager(_metaapi_token)
     return manager
 
 
@@ -150,41 +123,9 @@ def _limit(ip: str, limit: int = 8, window: int = 300, what: str = "connection a
 
 
 # ---------- health ----------
-@app.middleware("http")
-async def _instance_header(request: Request, call_next):
-    resp = await call_next(request)
-    resp.headers["X-Instance"] = MRPC_INSTANCE          # lets the browser notice if two copies of the app answer in turn
-    return resp
-
-
-@app.post("/api/diag")
-async def client_diag(request: Request):
-    """Browser-side connection events (only when MRPC_DEBUG=1). Contains no secrets: kind + short message."""
-    if os.getenv("MRPC_DEBUG", "").strip() in ("", "0", "false"):
-        return JSONResponse({"detail": "Not found"}, status_code=404)
-    try:
-        d = await request.json()
-        MRPC_DIAG.append(f"{time.strftime('%H:%M:%S')} CLIENT {str(d.get('k', ''))[:30]} | {str(d.get('m', ''))[:300]} | inst {MRPC_INSTANCE}")
-    except Exception:  # noqa: BLE001
-        pass
-    return JSONResponse({"ok": True})
-
-
-@app.get("/api/health/mrpc")
-async def health_mrpc():
-    """Recent MetaRPC failures and the first reply of each call. Only when MRPC_DEBUG=1; turn it off afterwards."""
-    if os.getenv("MRPC_DEBUG", "").strip() in ("", "0", "false"):
-        return JSONResponse({"detail": "Not found"}, status_code=404)
-    return {"build": MRPC_BUILD, "instance": MRPC_INSTANCE, "provider": PROVIDER, "lines": list(MRPC_DIAG)}
-
-
 @app.get("/api/health")
 async def health():
-    configured = (bool(_bridge_url and _bridge_key and len(_bridge_pw) >= 12) if PROVIDER == "bridge"
-                  else bool(_mrpc_key) if PROVIDER == "metarpc" else bool(_metaapi_token))
-    return {"status": "ok", "provider": PROVIDER, "mrpc_build": MRPC_BUILD, "instance": MRPC_INSTANCE, "metaapi": "configured" if _metaapi_token else "missing",
-            "metarpc": "configured" if _mrpc_key else "missing", "broker": "configured" if configured else "missing",
-            "time": int(time.time())}
+    return {"status": "ok", "metaapi": "configured" if _metaapi_token else "missing", "time": int(time.time())}
 
 
 # ---------- broker directory ----------
@@ -336,7 +277,7 @@ async def _startup():
 
     async def reaper():
         while True:
-            await asyncio.sleep(60 if PROVIDER in ("metarpc", "bridge") else 300)
+            await asyncio.sleep(300)
             if manager:
                 try:
                     await manager.reap_idle()
