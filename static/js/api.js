@@ -7,7 +7,7 @@ export class ApiError extends Error {
 
 let token = null;
 let diagOff = false, lastInstance = null; const diagSeen = {};
-// Connection diagnostics: sent to the server only while it runs with MRPC_DEBUG=1 (otherwise the first reply is a 404 and this stays silent).
+// Connection diagnostics: posted to /api/diag, which no longer exists, so the first 404 switches this off for good.
 export function report(kind, msg) {
   if (diagOff) return;
   const k = kind + '|' + msg, now = Date.now();
