@@ -7,6 +7,7 @@ import { closeAllSheets, openSheet, confirmSheet } from './ui.js';
 import { openConnect } from './connect.js';
 import { hooks, mountWatchlist, mountChart, selectSymbol } from './terminal.js';
 import { mountTicket, mountPositions } from './trading.js';
+import { mountMt5Web, refreshMt5Web, mt5Mode } from './mt5web.js';
 import * as scr from './screens.js';
 
 const $ = id => document.getElementById(id);
@@ -22,16 +23,20 @@ function applyTheme() {
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', S.settings.theme === 'dark' ? '#0b0d11' : '#ffffff');
   emit('theme');
 }
+function applyTradeMode() { document.body.dataset.trade = mt5Mode() ? 'mt5web' : 'builtin'; }
+on('settings', () => { applyTradeMode(); if (mt5Mode() && document.body.dataset.screen === 'positions') showScreen('trade'); });
 on('settings', applyTheme);
 
 // ---------- routing ----------
 function showScreen(name) {
   if (!SCREENS.includes(name)) name = 'chart';
+  if (name === 'positions' && mt5Mode()) name = 'trade';      // positions live inside the MT5 Web terminal in that mode
   closeAllSheets(); document.body.classList.remove('drawer-open');
   document.body.dataset.screen = name;
   document.body.dataset.group = TERMINAL.includes(name) ? 'terminal' : 'page';
   document.querySelectorAll('#rail button, #bottomNav button').forEach(b => b.dataset.k === name || (b.dataset.k === 'more' && !TERMINAL.includes(name)) ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
   if (TERMINAL.includes(name)) { hooks.visible?.(); if (name === 'positions') hooks.refreshPositions?.(); }
+  refreshMt5Web();
   const fn = { news: 'onNews', calendar: 'onCalendar', account: 'onAccount', strategies: 'onStrategies', settings: 'onSettings', assistant: 'onAssistant' }[name];
   if (fn) hooks[fn]?.();
   try { history.replaceState(null, '', '#' + name); } catch { /* ignore */ }
@@ -67,14 +72,17 @@ function paintAccount() {
   $('acctVal').textContent = a ? (acc ? `${acc.balance?.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${acc.currency}` : 'Connecting…') : 'Connect a broker';
   $('statusDot').className = 'status' + (a ? (S.online ? ' live' : ' bad') : '');
   const b = $('banner');
-  if (!a) {
+  if (!a && mt5Mode()) {
+    clear(b).append(h('span', {}, h('b', {}, 'Public prices'), ' are delayed. To trade, log in inside the MT5 Web terminal next to the chart.'));
+    b.classList.remove('hide'); document.body.classList.add('has-banner');
+  } else if (!a) {
     clear(b).append(h('span', {}, h('b', {}, 'Public prices'), ' are delayed. Connect your MetaTrader account to trade and see live broker prices.'), h('button', { class: 'btn sm primary', onclick: () => hooks.openConnect() }, 'Connect'));
     b.classList.remove('hide'); document.body.classList.add('has-banner');
   } else if (!S.online) {
     clear(b).append(h('span', {}, h('b', {}, 'Offline'), ' — reconnecting to your broker…')); b.classList.remove('hide'); document.body.classList.add('has-banner');
   } else { b.classList.add('hide'); document.body.classList.remove('has-banner'); }
 }
-on('snapshot', paintAccount); on('online', paintAccount);
+on('snapshot', paintAccount); on('online', paintAccount); on('settings', paintAccount);
 
 function accountSheet() {
   const body = h('div', { class: 'stack' });
@@ -146,8 +154,8 @@ on('quotes', checkAlerts); on('alerts', paintAlertDot); void lastSide;
 
 // ---------- boot ----------
 async function boot() {
-  applyTheme(); drawThemeBtn(); buildNav();
-  mountWatchlist($('panelQuotes')); mountChart($('panelChart')); mountTicket($('panelTrade')); mountPositions($('panelPositions'));
+  applyTheme(); applyTradeMode(); drawThemeBtn(); buildNav();
+  mountWatchlist($('panelQuotes')); mountChart($('panelChart')); mountTicket($('panelTrade')); mountPositions($('panelPositions')); mountMt5Web($('panelMt5'));
   scr.mountNews(); scr.mountCalendar(); scr.mountAccount(); scr.mountStrategies(); scr.mountLearn(); scr.mountAbout(); scr.mountDeveloper(); scr.mountAssistant(); scr.mountSettings();
   hooks.openTicket ??= () => showScreen('trade');
   paintAlertDot();
