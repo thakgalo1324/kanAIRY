@@ -28,6 +28,7 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 import auth  # noqa: E402
 from broker_manager import ApiError, BrokerManager, explain_error  # noqa: E402
+from bridge_manager import BridgeManager  # noqa: E402
 from mrpc_manager import BUILD as MRPC_BUILD, DIAG as MRPC_DIAG, INSTANCE as MRPC_INSTANCE, MrpcManager  # noqa: E402
 from models import ClosePositionRequest, ConnectRequest, ModifyRequest, OrderRequest  # noqa: E402
 from public_data import BY_SYMBOL, CATALOG, PublicData, PublicError  # noqa: E402
@@ -51,12 +52,25 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
+# Behind a hosting proxy (Pxxl, Render...) every request seems to come from the proxy's address, so the rate limiter
+# would treat all visitors as one person. Trust X-Forwarded-For when told to (TRUST_PROXY=1, or on Pxxl).
+if os.getenv("TRUST_PROXY", "").strip().lower() in ("1", "true", "yes") or os.getenv("PXXL_ENV"):
+    try:
+        from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+        app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+    except Exception:  # noqa: BLE001 - never stop the app from starting over this
+        logging.getLogger("kanairy").warning("could not enable proxy headers")
+
 public = PublicData()
 manager: Optional[BrokerManager] = None
 _metaapi_token = os.getenv("METAAPI_TOKEN", "").strip()
 _mrpc_key = os.getenv("MRPC_API_KEY", "").strip()
-# MetaRPC is the default whenever its key is set; BROKER_PROVIDER=metaapi forces the old gateway.
-PROVIDER = (os.getenv("BROKER_PROVIDER") or ("metarpc" if _mrpc_key else "metaapi")).strip().lower()
+_bridge_url = os.getenv("BRIDGE_URL", "").strip()
+_bridge_key = os.getenv("BRIDGE_API_KEY", "").strip()
+_bridge_pw = os.getenv("BRIDGE_ACCESS_PASSWORD", "").strip()
+# BROKER_PROVIDER picks the gateway: metarpc, metaapi or bridge. Unset: bridge if BRIDGE_URL is set, else MetaRPC when
+# its key is set, else MetaApi.
+PROVIDER = (os.getenv("BROKER_PROVIDER") or ("bridge" if _bridge_url else "metarpc" if _mrpc_key else "metaapi")).strip().lower()
 IDLE_SECONDS = int(os.getenv("MRPC_IDLE_SECONDS", "600") or 600)
 
 
@@ -68,7 +82,13 @@ async def _catalog_symbols():
 def get_manager() -> BrokerManager:
     global manager
     if manager is None:
-        if PROVIDER == "metarpc":
+        if PROVIDER == "bridge":
+            if not (_bridge_url and _bridge_key):
+                raise ApiError(503, "Broker access is not configured. Set BRIDGE_URL and BRIDGE_API_KEY on the server.", "not_configured")
+            if len(_bridge_pw) < 12:
+                raise ApiError(503, "Set BRIDGE_ACCESS_PASSWORD (12+ characters) on the server: it decides who may use this app.", "not_configured")
+            manager = BridgeManager(_bridge_url, _bridge_key, _bridge_pw)
+        elif PROVIDER == "metarpc":
             if not _mrpc_key:
                 raise ApiError(503, "Broker access is not configured. Set MRPC_API_KEY on the server.", "not_configured")
             manager = MrpcManager(_mrpc_key, idle_seconds=IDLE_SECONDS, fallback_candles=public.candles,
@@ -160,7 +180,8 @@ async def health_mrpc():
 
 @app.get("/api/health")
 async def health():
-    configured = bool(_mrpc_key) if PROVIDER == "metarpc" else bool(_metaapi_token)
+    configured = (bool(_bridge_url and _bridge_key and len(_bridge_pw) >= 12) if PROVIDER == "bridge"
+                  else bool(_mrpc_key) if PROVIDER == "metarpc" else bool(_metaapi_token))
     return {"status": "ok", "provider": PROVIDER, "mrpc_build": MRPC_BUILD, "instance": MRPC_INSTANCE, "metaapi": "configured" if _metaapi_token else "missing",
             "metarpc": "configured" if _mrpc_key else "missing", "broker": "configured" if configured else "missing",
             "time": int(time.time())}
@@ -315,7 +336,7 @@ async def _startup():
 
     async def reaper():
         while True:
-            await asyncio.sleep(60 if PROVIDER == "metarpc" else 300)
+            await asyncio.sleep(60 if PROVIDER in ("metarpc", "bridge") else 300)
             if manager:
                 try:
                     await manager.reap_idle()
