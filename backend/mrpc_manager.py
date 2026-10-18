@@ -230,6 +230,7 @@ class MrpcSession(BrokerSession):
         self.sid = sid
         self.platform = info.get("platform", "mt5")
         self._cache: Dict[str, Any] = {}
+        self._bad_syms: Dict[str, float] = {}
 
     # --- transport with one transparent restart if the gateway lost the terminal
     async def _call(self, name: str, **params) -> Any:
@@ -401,13 +402,15 @@ class MrpcSession(BrokerSession):
             async def fetch():
                 async with sem:
                     return _unwrap(await self._call("quote", symbol=sym))
-            try:
-                q = await self._cached("q:" + sym, 2.0, fetch)
-            except MrpcError:
+            if self._bad_syms.get(sym, 0) > time.time():      # broker has no such symbol: don't spend a terminal command on it again
                 return sym, None
-            except ApiError as e:
-                if e.code == "relink":
+            try:
+                q = await self._cached("q:" + sym, 3.0, fetch)
+            except (MrpcError, ApiError) as e:
+                if isinstance(e, ApiError) and e.code == "relink":
                     raise
+                if "unknown symbol" in str(e).lower() or "4301" in str(e):
+                    self._bad_syms[sym] = time.time() + 600
                 return sym, None
             bid, ask = _num(_g(q, "bid")), _num(_g(q, "ask"))
             if not bid and not ask:
@@ -607,7 +610,7 @@ class MrpcManager(BrokerManager):
     def __init__(self, api_key: str, http: Optional[httpx.AsyncClient] = None, idle_seconds: int = 600, cred_ttl: int = 12 * 3600,
                  fallback_candles=None, fallback_symbols=None):
         self.token = api_key
-        self.max_quotes = max(1, int(os.getenv("MRPC_MAX_QUOTES", "8") or 8))   # price lookups per poll: too many starve the terminal
+        self.max_quotes = max(1, int(os.getenv("MRPC_MAX_QUOTES", "4") or 4))   # price lookups per poll: too many starve the terminal
         self.fallback_symbols = fallback_symbols           # async () -> list of symbol dicts (the app's instrument catalogue)
         self.broker_symbols = os.getenv("MRPC_BROKER_SYMBOLS", "").strip() not in ("", "0", "false")
         self.fallback_candles = fallback_candles           # async (symbol, timeframe, limit) -> rows; the public price feed
