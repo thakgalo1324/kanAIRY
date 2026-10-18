@@ -2,6 +2,7 @@ import { chromium } from '/home/claude/.npm-global/lib/node_modules/playwright/i
 const out = process.env.OUT || '/tmp/shots'; const b = await chromium.launch(); const errs = [];
 const ctx = await b.newContext({ viewport: { width: 1366, height: 800 } }); const pg = await ctx.newPage();
 pg.on('pageerror', e => errs.push('pageerror: ' + e.stack)); pg.on('console', m => { if (m.type() === 'error') errs.push('console: ' + m.text()); });
+await pg.addInitScript(() => localStorage.setItem('kanairy.settings', JSON.stringify({ tradeMode: 'builtin' })));
 await pg.goto('http://localhost:8765/#chart'); await pg.waitForTimeout(1500);
 await pg.click('#banner button'); await pg.waitForTimeout(1200); await pg.screenshot({ path: out + '/flow1-directory.png' });
 await pg.click('#sheetRoot .bk-card >> nth=0'); await pg.waitForTimeout(500); await pg.screenshot({ path: out + '/flow2-server.png' });
