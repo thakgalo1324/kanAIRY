@@ -323,3 +323,19 @@ body.drawer-open #drawer { transform: none; } body.drawer-open #drawerScrim { op
   .chart-top .tools .seg button { flex: 1 1 0; min-width: 0; padding: 9px 4px; font-size: 12px; }
   .chart-top .tools .tbtn { padding: 0 8px; gap: 5px; font-size: 12px; }
 }
+
+/* ---- MT5 Web terminal panel (replaces the built-in ticket and positions when Settings > Trading panel = MT5 Web) ---- */
+#panelMt5 { display: none; flex-direction: column; min-height: 0; min-width: 0; background: var(--panel); }
+body[data-trade="mt5web"] #panelTrade, body[data-trade="mt5web"] #panelPositions { display: none !important; }
+body:not([data-trade="mt5web"]) #panelMt5 { display: none !important; }
+body[data-trade="mt5web"][data-screen="trade"] #panelMt5, body[data-trade="mt5web"][data-screen="positions"] #panelMt5 { display: flex; flex: 1; }
+.mt5-bar { display: flex; align-items: center; gap: 10px; padding: 14px 16px 6px; }
+.mt5-bar b { font-size: 15px; } .mt5-bar .grow { flex: 1; }
+.mt5-note { padding: 0 16px 10px; font-size: 12.5px; color: var(--mute); }
+.mt5-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; }
+@media (min-width: 1000px) {
+  body[data-trade="mt5web"][data-group="terminal"] #terminal { grid-template-columns: 340px minmax(0, 1fr) 440px; }
+  body[data-trade="mt5web"] #panelMt5 { display: flex !important; grid-row: 1 / 3; grid-column: 3; }
+  body[data-trade="mt5web"] #panelChart { grid-row: 1 / 3; }
+}
+@media (max-width: 999px) { #panelMt5 { padding-bottom: calc(var(--nav-h) + 12px); } }
