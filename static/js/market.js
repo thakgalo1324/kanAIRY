@@ -4,13 +4,13 @@ import { S, active, isBroker, favorites, emit, inst } from './state.js';
 
 let quoteTimer = null, snapTimer = null, quoteCtl = null;
 let quoteBusy = false, snapBusy = false, lastOk = Date.now();
-const MAX_BROKER_QUOTES = 8;           // every broker price is a command the cloud terminal runs in turn: keep the list short
+const MAX_BROKER_QUOTES = 4;           // every broker price is a command the cloud terminal runs in turn: keep the list short
 
 // Connection status: a single slow or failed poll must not flash "Offline". Only a stretch with no success at all does.
 function markOk() { lastOk = Date.now(); if (!S.online) { S.online = true; report('status', 'back online'); emit('online'); } }
 function markFail(e) {
   if (e?.name === 'AbortError' || e?.status === 401) return;
-  if (Date.now() - lastOk > 15000 && S.online) { S.online = false; report('status', `OFFLINE after 15s without a successful poll; last error: ${e?.status ?? ''} ${e?.message ?? ''}`); emit('online'); }
+  if (Date.now() - lastOk > 45000 && S.online) { S.online = false; report('status', `OFFLINE after 45s without a successful poll; last error: ${e?.status ?? ''} ${e?.message ?? ''}`); emit('online'); }
 }
 const dayRefAt = {};
 const FALLBACK_INSTRUMENTS = [
@@ -104,8 +104,8 @@ export function startPolling() {
   stopPolling();
   quoteBusy = false; snapBusy = false; lastOk = Date.now();
   pollQuotes(); pollSnapshot();
-  quoteTimer = setInterval(pollQuotes, 3000);
-  snapTimer = setInterval(pollSnapshot, isBroker() ? 3000 : 2000);
+  quoteTimer = setInterval(pollQuotes, isBroker() ? 5000 : 3000);
+  snapTimer = setInterval(pollSnapshot, isBroker() ? 5000 : 2000);
 }
 export function stopPolling() { clearInterval(quoteTimer); clearInterval(snapTimer); quoteCtl?.abort(); }
 export const refreshNow = () => { pollQuotes(); pollSnapshot(); };
