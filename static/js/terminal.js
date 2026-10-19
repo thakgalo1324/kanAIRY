@@ -1,13 +1,12 @@
 // Market watch + chart panel.
 import { h, icon, clear, $, toast, signed, cls, arrow, num } from './util.js';
-import { S, on, emit, inst, digitsOf, favorites, toggleFavorite, isBroker, persist, TFS, TF_SEC, drawingsFor, saveDrawings } from './state.js';
-import { candles, dayChange, refreshNow } from './market.js';
+import { S, on, emit, inst, digitsOf, favorites, toggleFavorite, persist, TFS, TF_SEC, drawingsFor, saveDrawings } from './state.js';
+import { candles, dayChange } from './market.js';
 import { Chart, DRAW_TOOLS } from './chart.js';
 import { REGISTRY, GROUPS, PALETTE, defaults } from './indicators.js';
 import { openSheet, contextMenu, promptSheet, confirmSheet } from './ui.js';
-import { api } from './api.js';
 
-export const hooks = { showScreen: () => {}, openTicket: () => {}, openConnect: () => {}, markers: [] };
+export const hooks = { showScreen: () => {}, markers: [] };
 
 const fmt = (v, d) => (v == null || Number.isNaN(v) ? '—' : Number(v).toFixed(d));
 
@@ -34,7 +33,7 @@ export function pickSymbol(onPick) {
 export function mountWatchlist(root) {
   const input = h('input', { type: 'search', placeholder: 'Search symbols', 'aria-label': 'Search symbols' });
   const tabs = h('div', { class: 'tabs', role: 'tablist' });
-  const head = h('div', { class: 'qhead' }, h('span'), h('span', {}, 'Symbol'), h('span', {}, isBroker() ? 'Bid' : 'Price'), h('span', {}, isBroker() ? 'Ask' : ''), h('span', {}, 'Day'));
+  const head = h('div', { class: 'qhead' }, h('span'), h('span', {}, 'Symbol'), h('span', {}, 'Price'), h('span'), h('span', {}, 'Day'));
   const list = h('div', { class: 'scroll' });
   const rows = new Map();
   clear(root).append(h('div', { class: 'panel-head' }, 'Market watch', h('span', { class: 'sub', id: 'wlCount' })), h('div', { class: 'search' }, icon('search', 16), input), tabs, head, list);
@@ -42,7 +41,6 @@ export function mountWatchlist(root) {
   function drawTabs() {
     const cats = ['Favorites', ...[...new Set(S.instruments.map(i => i.cat))]];
     clear(tabs).append(...cats.map(c => h('button', { class: 'tab', role: 'tab', 'aria-selected': String(c === S.catFilter), onclick: () => { S.catFilter = c; drawTabs(); drawList(); emit('watch'); } }, c)));
-    head.children[2].textContent = isBroker() ? 'Bid' : 'Price'; head.children[3].textContent = isBroker() ? 'Ask' : '';
   }
   function visible() {
     const q = input.value.trim().toLowerCase();
@@ -67,25 +65,23 @@ export function mountWatchlist(root) {
         onclick: () => { selectSymbol(i.symbol); hooks.showScreen('chart'); }, onkeydown: e => { if (e.key === 'Enter') row.click(); } },
         h('button', { class: 'star' + (fav ? ' on' : ''), 'aria-label': fav ? 'Remove from favourites' : 'Add to favourites', onclick: e => { e.stopPropagation(); toggleFavorite(i.symbol); drawList(); } }, icon('star', 15)),
         h('div', { style: { minWidth: 0 } }, h('div', { class: 'sym' }, i.symbol), h('div', { class: 'desc' }, i.name)),
-        h('div', { class: 'px', dataset: { f: 'bid' } }, '—'), h('div', { class: 'px', dataset: { f: 'ask' } }, '—'), h('div', { class: 'chg', dataset: { f: 'chg' } }, '—'));
+        h('div', { class: 'px', dataset: { f: 'bid' } }, '—'), h('div', { class: 'px' }), h('div', { class: 'chg', dataset: { f: 'chg' } }, '—'));
       rows.set(i.symbol, row); list.append(row); paint(i.symbol);
     });
   }
   function paint(sym) {
     const row = rows.get(sym), q = S.quotes[sym]; if (!row || !q) return;
-    const d = digitsOf(sym), bid = row.querySelector('[data-f=bid]'), ask = row.querySelector('[data-f=ask]'), chg = row.querySelector('[data-f=chg]');
+    const d = digitsOf(sym), bid = row.querySelector('[data-f=bid]'), chg = row.querySelector('[data-f=chg]');
     const nb = fmt(q.bid, d);
     if (bid.textContent !== nb) { if (bid.textContent !== '—') { bid.classList.remove('flash-up', 'flash-down'); void bid.offsetWidth; bid.classList.add(q.dir >= 0 ? 'flash-up' : 'flash-down'); } bid.textContent = nb; }
     bid.className = 'px ' + (q.dir > 0 ? 'up' : q.dir < 0 ? 'down' : '') + (bid.classList.contains('flash-up') ? ' flash-up' : bid.classList.contains('flash-down') ? ' flash-down' : '');
-    ask.textContent = isBroker() ? fmt(q.ask, d) : '';
     const dc = dayChange(sym);
     chg.textContent = dc ? `${dc.pct >= 0 ? '+' : '−'}${Math.abs(dc.pct).toFixed(2)}%` : '—'; chg.className = 'chg ' + (dc ? cls(dc.pct) : '');
   }
   input.addEventListener('input', () => { drawList(); emit('watch'); });
   on('quotes', () => rows.forEach((_, s) => paint(s)));
-  on('instruments', () => { if (!favorites().length && isBroker()) S.catFilter = S.instruments[0] ? S.instruments[0].cat : 'Favorites'; drawTabs(); drawList(); });
+  on('instruments', () => { drawTabs(); drawList(); });
   on('favorites', drawList);
-  on('mode', () => { S.catFilter = isBroker() && !favorites().length ? (S.instruments[0]?.cat || 'Favorites') : 'Favorites'; drawTabs(); drawList(); });
   on('symbol', () => rows.forEach((row, s) => row.classList.toggle('sel', s === S.symbol)));
   drawTabs(); drawList();
 }
@@ -107,9 +103,7 @@ export function mountChart(root) {
   const alertBtn = h('button', { class: 'tbtn', onclick: () => addAlert() }, icon('bell', 16), 'Alert');
   const wrap = h('div', { class: 'chart-wrap' });
   const msg = h('div', { class: 'empty hide', style: { position: 'absolute', inset: '0', display: 'grid', placeContent: 'center', zIndex: 4, background: 'var(--chart-bg)' } });
-  const sellBtn = h('button', { class: 'qbtn sell', onclick: () => hooks.openTicket({ side: 'sell' }) }, 'Sell', h('small', {}, '—'));
-  const buyBtn = h('button', { class: 'qbtn buy', onclick: () => hooks.openTicket({ side: 'buy' }) }, 'Buy', h('small', {}, '—'));
-  const quick = h('div', { class: 'chart-quick' }, sellBtn, buyBtn);
+  const quick = h('div', { class: 'chart-quick' }, h('button', { class: 'qbtn', onclick: () => hooks.showScreen('trade') }, 'Trade'));
   const latest = h('button', { class: 'fab hide', onclick: () => chart.goLatest() }, 'Latest ›');
   wrap.append(msg, quick, h('div', { class: 'chart-fab' }, latest));
   clear(root).append(h('div', { class: 'chart-top' }, symBtn, h('div', {}, px, chg), h('div', { class: 'tools' }, tfSeg, typeBtn, indBtn, drawBtn, alertBtn)), wrap);
@@ -131,12 +125,10 @@ export function mountChart(root) {
     if (chart) return chart;
     chart = new Chart(wrap, {
       drawColor: null,
-      onNeedMore: loadOlder,
       onDrawingsChange: list => saveDrawings(S.symbol, list),
       onToolChange: () => { draftTool = null; drawBtn.classList.remove('on'); },
       onTextRequest: cb => promptSheet({ title: 'Add text', label: 'Label', okText: 'Add' }).then(v => cb(v && v.trim())),
       onIndicator: (uid, act) => { if (act === 'remove') removeIndicator(uid); else editIndicator(uid); },
-      onLevelDrag: handleLevelDrag,
       onContext: handleContext,
       onCrosshair: () => latest.classList.toggle('hide', chart.isAtEnd()),
     });
@@ -160,9 +152,7 @@ export function mountChart(root) {
     if (!q) return;
     px.textContent = fmt(q.bid, d); px.className = 'bigpx ' + (q.dir > 0 ? 'up' : q.dir < 0 ? 'down' : '');
     const dc = dayChange(S.symbol);
-    chg.textContent = dc ? `${arrow(dc.abs)} ${signed(dc.abs, d)} (${signed(dc.pct)}%)` : (isBroker() ? '' : 'Public feed'); chg.className = 'bigchg ' + (dc ? cls(dc.abs) : 'mute');
-    sellBtn.querySelector('small').textContent = fmt(q.bid, d); buyBtn.querySelector('small').textContent = isBroker() ? fmt(q.ask, d) : fmt(q.bid, d);
-    quick.classList.toggle('hide', !isBroker());
+    chg.textContent = dc ? `${arrow(dc.abs)} ${signed(dc.abs, d)} (${signed(dc.pct)}%)` : 'Public feed'; chg.className = 'bigchg ' + (dc ? cls(dc.abs) : 'mute');
   }
 
   async function load() {
@@ -171,13 +161,13 @@ export function mountChart(root) {
     clear(msg).classList.add('hide'); chart.setData([], {}); chart.opts.emptyText = 'Loading prices…';
     header();
     try {
-      const cs = await candles(S.symbol, S.tf, isBroker() ? 500 : 800, null, loadCtl.signal);
+      const cs = await candles(S.symbol, S.tf, 800, null, loadCtl.signal);
       if (id !== loadId) return;
       if (!cs.length) throw new Error('No price history for this symbol and timeframe yet.');
       chart.setData(cs, { tfSeconds: TF_SEC[S.tf], digits: digitsOf(S.symbol) });
       chart.setDrawings(drawingsFor(S.symbol)); chart.setMarkers(hooks.markers);
-      paintLevels(); paintQuote();
-      clearInterval(tailTimer); tailTimer = setInterval(refreshTail, isBroker() ? 5000 : 12000);
+      paintLevels();
+      clearInterval(tailTimer); tailTimer = setInterval(refreshTail, 12000);
     } catch (e) {
       if (e.name === 'AbortError' || id !== loadId) return;
       msg.classList.remove('hide'); clear(msg).append(h('b', {}, 'Chart unavailable'), h('div', { style: { margin: '4px 0 12px' } }, e.message), h('button', { class: 'btn sm', onclick: load }, 'Try again'));
@@ -188,61 +178,18 @@ export function mountChart(root) {
     try { const cs = await candles(S.symbol, S.tf, 4); chart.mergeTail(cs.slice(-4)); } catch { /* next tick */ }
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshTail(); });
-  async function loadOlder() {
-    if (!isBroker() || !chart.raw.length) return;
-    const id = loadId, first = chart.raw[0].t;
-    try { const cs = await candles(S.symbol, S.tf, 500, first); if (id === loadId) chart.prependCandles(cs); } catch { /* ignore */ }
-  }
-  function paintQuote() { const q = S.quotes[S.symbol]; if (chart) chart.setQuote(isBroker() && q ? q.bid : null, q?.ask); }
-
-  // ----- trade levels -----
+  // ----- price alert levels -----
   function paintLevels() {
     if (!chart) return;
-    const lv = [], d = digitsOf(S.symbol);
-    S.positions.filter(p => p.symbol === S.symbol).forEach(p => {
-      const c = p.side === 'buy' ? 'var(--up)' : 'var(--down)';
-      lv.push({ kind: 'position', id: p.id, price: p.openPrice, color: cssVar(p.side === 'buy' ? '--up' : '--down'), label: `${p.side.toUpperCase()} ${p.volume} · ${signed(p.profit)}` });
-      if (p.stopLoss) lv.push({ kind: 'sl', pos: p, price: p.stopLoss, color: cssVar('--down'), label: `SL ${fmt(p.stopLoss, d)}`, draggable: true });
-      if (p.takeProfit) lv.push({ kind: 'tp', pos: p, price: p.takeProfit, color: cssVar('--up'), label: `TP ${fmt(p.takeProfit, d)}`, draggable: true });
-      void c;
-    });
-    S.orders.filter(o => o.symbol === S.symbol).forEach(o => lv.push({ kind: 'order', order: o, price: o.price, color: cssVar('--warn'), label: `${o.type.replace('_', ' ').toUpperCase()} ${o.volume}`, draggable: true }));
+    const lv = [];
     S.alerts.filter(a => a.symbol === S.symbol && !a.fired).forEach(a => lv.push({ kind: 'alert', price: a.price, color: cssVar('--brand'), label: 'Alert' }));
     chart.setLevels(lv);
   }
   const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#3d8bff';
 
-  async function handleLevelDrag(l, price) {
-    const d = digitsOf(S.symbol), p = +price.toFixed(d), q = S.quotes[S.symbol];
-    if (l.kind === 'sl' || l.kind === 'tp') {
-      const pos = S.positions.find(x => x.id === l.pos.id), label = l.kind === 'sl' ? 'stop loss' : 'take profit';
-      if (!pos) { toast('That position is no longer open.', 'error'); paintLevels(); return; }
-      const ref = q ? (pos.side === 'buy' ? q.bid : q.ask) : pos.currentPrice;
-      const wrongSide = l.kind === 'sl' ? (pos.side === 'buy' ? p >= ref : p <= ref) : (pos.side === 'buy' ? p <= ref : p >= ref);
-      if (wrongSide) { toast(`A ${label} for a ${pos.side} must be ${(l.kind === 'sl') === (pos.side === 'buy') ? 'below' : 'above'} the current price.`, 'error'); paintLevels(); return; }
-      const ok = await confirmSheet({ title: 'Move ' + label, message: `Move ${label} for ${pos.side.toUpperCase()} ${pos.symbol} (${pos.volume} lots) to ${p}?`, okText: 'Move' });
-      if (!ok) { paintLevels(); return; }
-      try { await api.modifyPosition(pos.id, l.kind === 'sl' ? { stopLoss: p } : { takeProfit: p }); toast('Updated ' + label, 'ok'); refreshNow(); }
-      catch (e) { toast(e.message, 'error'); paintLevels(); }
-    } else if (l.kind === 'order') {
-      const o = S.orders.find(x => x.id === l.order.id);
-      if (!o) { toast('That order is no longer pending.', 'error'); paintLevels(); return; }
-      if (o.type === 'buy_stop_limit' || o.type === 'sell_stop_limit') { toast('Edit stop-limit orders from the Orders tab.', 'error'); paintLevels(); return; }
-      const ok = await confirmSheet({ title: 'Move pending order', message: `Move ${o.type.replace('_', ' ')} ${o.symbol} to ${p}?`, okText: 'Move' });
-      if (!ok) { paintLevels(); return; }
-      try { await api.modifyOrder(o.id, { price: p }); toast('Order moved', 'ok'); refreshNow(); }
-      catch (e) { toast(e.message, 'error'); paintLevels(); }
-    }
-  }
-
   function handleContext(c) {
-    const d = digitsOf(S.symbol), p = +c.price.toFixed(d), q = S.quotes[S.symbol];
+    const d = digitsOf(S.symbol), p = +c.price.toFixed(d);
     const items = [];
-    if (isBroker() && q) {
-      const buyType = p < q.ask ? 'limit' : 'stop', sellType = p > q.bid ? 'limit' : 'stop';
-      items.push({ label: `Buy ${buyType} at ${p}`, run: () => hooks.openTicket({ side: 'buy', type: buyType, price: p }) });
-      items.push({ label: `Sell ${sellType} at ${p}`, run: () => hooks.openTicket({ side: 'sell', type: sellType, price: p }) });
-    }
     items.push({ label: `Price alert at ${p}`, run: () => createAlert(p) });
     items.push({ label: `Horizontal line at ${p}`, run: () => { const list = drawingsFor(S.symbol); list.push({ id: Date.now(), tool: 'hline', pts: [{ t: c.time, p }] }); saveDrawings(S.symbol, list); chart.setDrawings(list); } });
     contextMenu(c.clientX, c.clientY, `${S.symbol} @ ${p}`, items);
@@ -298,12 +245,11 @@ export function mountChart(root) {
   // ----- wiring -----
   on('symbol', () => { header(); paintPrice(); load(); });
   on('instruments', () => { header(); load(); });
-  on('mode', () => { header(); paintPrice(); load(); });
   on('quotes', () => {
-    paintPrice(); paintQuote(); const q = S.quotes[S.symbol];
+    paintPrice(); const q = S.quotes[S.symbol];
     if (chart && q && q.bid) chart.tick(q.bid, q.time || Date.now() / 1000);
   });
-  on('snapshot', paintLevels); on('alerts', paintLevels);
+  on('alerts', paintLevels);
   on('theme', () => chart?.refreshTheme());
   on('markers', () => chart?.setMarkers(hooks.markers));
   on('resize', () => chart?.resize());
@@ -311,4 +257,4 @@ export function mountChart(root) {
   hooks.refreshChart = load;
   hooks.chart = () => chart;
   hooks.visible = () => { ensureChart(); chart.resize(); };
-}
+                                                                                                                                                                                              }
