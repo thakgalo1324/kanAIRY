@@ -8,10 +8,6 @@ export const on = (name, fn) => { bus.addEventListener(name, e => fn(e.detail));
 const DEFAULT_FAVS_PUBLIC = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'US500', 'NAS100', 'BTCUSD', 'ETHUSD', 'AAPL', 'USDZAR'];
 
 export const S = {
-  accounts: store.get('accounts', []),          // [{id,label,broker,login,server,platform,token}]
-  activeId: store.get('activeId', null),
-  account: null,                                 // live account info (broker mode)
-  positions: [], orders: [], deals: [],
   instruments: [],                               // [{symbol,name,cat,digits,...}]
   quotes: {},                                    // symbol -> {bid,ask,time,prevClose?,dayRef?}
   symbol: store.get('symbol', 'EURUSD'),
@@ -19,18 +15,14 @@ export const S = {
   chartType: store.get('chartType', 'candles'),
   indicators: store.get('indicators', [{ uid: 1, id: 'ema', params: { period: 21 } }]),
   alerts: store.get('alerts', []),               // [{id,symbol,price,dir,created,fired}]
-  settings: { theme: 'light', confirmOrders: true, colorblind: false, defaultVolume: 0.01, tradeMode: 'mt5web', mt5Url: '', ...store.get('settings', {}) },
+  settings: { theme: 'light', colorblind: false, mt5Url: '', ...store.get('settings', {}) },
   online: true,
-  lastSnapshot: 0,
   catFilter: 'Favorites',
   query: '',
 };
 
-export const active = () => S.accounts.find(a => a.id === S.activeId) || null;
-export const isBroker = () => !!active();
-export const favKey = () => 'favs.' + (active()?.id || 'public');
-export const favorites = () => store.get(favKey(), isBroker() ? [] : DEFAULT_FAVS_PUBLIC);
-export const setFavorites = f => store.set(favKey(), f);
+export const favorites = () => store.get('favs.public', DEFAULT_FAVS_PUBLIC);
+export const setFavorites = f => store.set('favs.public', f);
 export const toggleFavorite = sym => {
   const f = favorites(); const i = f.indexOf(sym);
   if (i >= 0) f.splice(i, 1); else f.push(sym);
@@ -40,7 +32,6 @@ export const inst = sym => S.instruments.find(i => i.symbol === sym);
 export const digitsOf = sym => inst(sym)?.digits ?? (S.quotes[sym]?.bid > 500 ? 2 : S.quotes[sym]?.bid > 20 ? 3 : 5);
 
 export function persist() {
-  store.set('accounts', S.accounts); store.set('activeId', S.activeId);
   store.set('symbol', S.symbol); store.set('tf', S.tf); store.set('chartType', S.chartType);
   store.set('indicators', S.indicators); store.set('alerts', S.alerts); store.set('settings', S.settings);
 }
