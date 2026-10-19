@@ -115,6 +115,13 @@ hooks.openConnect = preset => openConnect(res => {
   toast('Connected to ' + (res.broker || res.server), 'ok');
   enterMode().then(() => showScreen('chart'));
 }, preset);
+// In MT5 Web mode people log in inside the terminal panel, so the built-in broker screen (which needs a MetaApi
+// token on the server) is not opened at all.
+const _connectBroker = hooks.openConnect;
+hooks.openConnect = preset => {
+  if (mt5Mode()) { closeAllSheets(); showScreen('trade'); toast('Log in inside the MT5 Web terminal.'); return; }
+  return _connectBroker(preset);
+};
 
 hooks.switchAccount = id => { S.activeId = id; persist(); enterMode(); toast('Switched account'); };
 hooks.disconnect = async id => {
