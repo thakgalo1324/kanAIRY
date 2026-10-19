@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>KanAIRY — MetaTrader terminal</title>
-<meta name="description" content="Trade with any MetaTrader 4 or 5 broker. Live charts, 25+ indicators, one-tap orders, news and economic calendar.">
+<meta name="description" content="Charts, 25+ indicators, price alerts, news, an economic calendar and the MT5 Web terminal to trade with your broker.">
 <meta name="theme-color" content="#ffffff">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/static/img/icon.svg" type="image/svg+xml">
@@ -14,14 +14,13 @@
 <header id="top">
   <button class="icon-btn" id="btnMenu" aria-label="Open menu"></button>
   <div class="brand">KanAIRY</div>
-  <button class="acct-chip" id="acctChip" aria-label="Account">
+  <button class="acct-chip" id="acctChip" aria-label="Open the trading terminal">
     <span class="status" id="statusDot"></span>
-    <span><span class="lbl" id="acctLbl">Public prices</span><br><span class="val" id="acctVal">Connect a broker</span></span>
+    <span><span class="lbl" id="acctLbl">Public prices</span><br><span class="val" id="acctVal">Trade in MT5 Web</span></span>
   </button>
   <button class="icon-btn" id="btnAlerts" aria-label="Price alerts"></button>
   <button class="icon-btn" id="btnTheme" aria-label="Toggle theme"></button>
 </header>
-<div id="banner" class="hide"></div>
 
 <nav id="rail" aria-label="Main"></nav>
 
@@ -29,13 +28,10 @@
   <section id="terminal" class="view">
     <aside class="panel" id="panelQuotes" aria-label="Market watch"></aside>
     <section class="panel" id="panelChart" aria-label="Chart"></section>
-    <aside class="panel" id="panelTrade" aria-label="Order ticket"></aside>
     <section class="panel" id="panelMt5" aria-label="MT5 Web terminal"></section>
-    <section class="panel" id="panelPositions" aria-label="Positions"></section>
   </section>
   <section class="view page" id="view-news"></section>
   <section class="view page" id="view-calendar"></section>
-  <section class="view page" id="view-account"></section>
   <section class="view page" id="view-strategies"></section>
   <section class="view page" id="view-learn"></section>
   <section class="view page" id="view-settings"></section>
