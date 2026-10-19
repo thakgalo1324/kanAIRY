@@ -58,12 +58,7 @@ h1, h2, h3, p, span, b, div, td, th, label, a, small { overflow-wrap: anywhere; 
 .acct-chip .val { font-weight: 600; font-size: 13px; line-height: 1.3; display: block; }
 .status { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); flex: none; }
 .status.live { background: var(--up); box-shadow: 0 0 0 4px var(--up-bg); } .status.bad { background: var(--down); box-shadow: 0 0 0 4px var(--down-bg); }
-#banner { display: flex; align-items: center; gap: 16px; padding: 12px 20px; font-size: 13px; background: var(--panel2); border-bottom: 1px solid var(--line); color: var(--mute); }
-#banner > span { flex: 1; min-width: 0; }
-#banner b { color: var(--text); font-weight: 600; }
-#banner button { margin-left: auto; white-space: nowrap; flex: none; }
 #app { height: calc(100% - var(--top-h) - var(--nav-h)); position: relative; }
-body.has-banner #app { height: calc(100% - var(--top-h) - var(--nav-h) - 52px); }
 .view { display: none; height: 100%; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 .page { padding: 32px 22px 56px; }
 .page > .inner { max-width: 960px; margin: 0 auto; width: 100%; }
@@ -88,7 +83,7 @@ body[data-screen] .view.page, body[data-screen] .panel { animation: screenIn .42
 #terminal { flex-direction: column; height: 100%; padding-bottom: 0; }
 body:not([data-group="terminal"]) #terminal { display: none; }
 .panel { display: none; flex-direction: column; min-height: 0; min-width: 0; background: var(--panel); }
-body[data-screen="quotes"] #panelQuotes, body[data-screen="chart"] #panelChart, body[data-screen="trade"] #panelTrade, body[data-screen="positions"] #panelPositions { display: flex; flex: 1; }
+body[data-screen="quotes"] #panelQuotes, body[data-screen="chart"] #panelChart, body[data-screen="trade"] #panelMt5 { display: flex; flex: 1; }
 .panel-head { display: flex; align-items: center; gap: 12px; padding: 18px 20px 14px; font-weight: 600; font-size: 15px; min-width: 0; }
 .panel-head .sub { font-weight: 400; color: var(--mute); font-size: 12.5px; }
 .scroll { overflow-y: auto; overflow-x: hidden; min-height: 0; flex: 1; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
@@ -136,10 +131,7 @@ body[data-screen="quotes"] #panelQuotes, body[data-screen="chart"] #panelChart, 
 .chart-fab { position: absolute; right: 78px; bottom: 36px; z-index: 3; }
 .fab { padding: 10px 16px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-size: 12.5px; font-weight: 500; box-shadow: var(--shadow-m); }
 .chart-quick { position: absolute; left: 14px; bottom: 36px; z-index: 3; display: flex; gap: 10px; }
-.qbtn { min-width: 96px; padding: 10px 18px; border-radius: 14px; color: #fff; font-weight: 600; text-align: center; line-height: 1.25; font-size: 12.5px; box-shadow: var(--shadow-m); }
-.qbtn small { display: block; font-size: 11.5px; font-weight: 500; opacity: .92; white-space: nowrap; }
-.qbtn.sell { background: var(--down); } .qbtn.buy { background: var(--up); }
-:root[data-cb="1"] .qbtn.buy, :root[data-cb="1"] .qbtn.sell { color: #fff; }
+.qbtn { min-width: 110px; padding: 11px 20px; border-radius: 14px; background: var(--brand); color: var(--on-brand); font-weight: 600; text-align: center; font-size: 13px; box-shadow: var(--shadow-m); }
 .ctx { position: fixed; z-index: 80; min-width: 230px; max-width: 92vw; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow-l); padding: 8px; animation: pop .22s var(--ease); }
 @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
 .ctx button { display: block; width: 100%; text-align: left; padding: 12px 14px; border-radius: 12px; font-size: 13.5px; }
@@ -271,16 +263,16 @@ body.drawer-open #drawer { transform: none; } body.drawer-open #drawerScrim { op
   :root { --nav-h: 0px; }
   #bottomNav { display: none; }
   body { display: grid; grid-template-columns: 96px 1fr; grid-template-rows: auto auto 1fr; }
-  #top { grid-column: 1 / -1; padding: 0 28px; } #banner { grid-column: 1 / -1; }
+  #top { grid-column: 1 / -1; padding: 0 28px; }
   #rail { display: flex; flex-direction: column; gap: 6px; background: var(--panel); border-right: 1px solid var(--line); padding: 16px 12px; grid-row: 3; overflow-y: auto; overflow-x: hidden; }
   #rail button { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 0; font-size: 11px; font-weight: 500; color: var(--faint); border-radius: 16px; min-width: 0; }
   #rail button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #rail button[aria-current="page"] { color: var(--on-brand); background: var(--brand); box-shadow: 0 8px 20px rgba(14, 17, 22, .18); }
   #rail button:hover:not([aria-current="page"]) { color: var(--text); background: var(--panel2); }
-  #app { height: 100%; grid-row: 3; grid-column: 2; min-height: 0; min-width: 0; padding: 0; } body.has-banner #app { height: 100%; }
-  body[data-group="terminal"] #terminal { display: grid; grid-template-columns: 340px minmax(0, 1fr) 340px; grid-template-rows: minmax(0, 1fr) 232px; gap: 16px; padding: 16px; background: var(--bg); }
+  #app { height: 100%; grid-row: 3; grid-column: 2; min-height: 0; min-width: 0; padding: 0; }
+  body[data-group="terminal"] #terminal { display: grid; grid-template-columns: 340px minmax(0, 1fr) 440px; grid-template-rows: minmax(0, 1fr); gap: 16px; padding: 16px; background: var(--bg); }
   .panel { display: flex !important; border-radius: 24px; border: 1px solid var(--line); box-shadow: var(--shadow-s); overflow: hidden; }
-  #panelQuotes { grid-row: 1 / 3; grid-column: 1; } #panelChart { grid-row: 1; grid-column: 2; } #panelTrade { grid-row: 1 / 3; grid-column: 3; overflow-y: auto; } #panelPositions { grid-row: 2; grid-column: 2; }
+  #panelQuotes { grid-row: 1; grid-column: 1; } #panelChart { grid-row: 1; grid-column: 2; } #panelMt5 { grid-row: 1; grid-column: 3; }
   .cards { display: none !important; }
   .sheet { left: 50%; right: auto; bottom: auto; top: 50%; transform: translate(-50%, -50%); width: min(580px, 94vw); border-radius: 28px; animation: dialogIn .42s var(--ease); max-height: 88vh; }
   @keyframes dialogIn { from { opacity: 0; transform: translate(-50%, calc(-50% + 18px)) scale(.985); } to { opacity: 1; transform: translate(-50%, -50%); } }
@@ -307,16 +299,12 @@ body.drawer-open #drawer { transform: none; } body.drawer-open #drawerScrim { op
   .icon-btn { width: 40px; height: 40px; }
   .qrow { grid-template-columns: 24px minmax(0, 1fr) minmax(66px, auto) minmax(0, auto) minmax(54px, auto); gap: 8px; padding: 14px 16px; } .qhead { grid-template-columns: 24px minmax(0, 1fr) minmax(66px, auto) minmax(0, auto) minmax(54px, auto); padding: 8px 16px; }
   .bigpx { font-size: 21px; } .chart-top { padding: 14px 16px 12px; }
-  .search { margin: 4px 16px 12px; } .tabs { padding: 2px 16px 14px; } .ticket { padding: 8px 16px 28px; }
-  .qbtn { min-width: 80px; padding: 9px 12px; }
+  .search { margin: 4px 16px 12px; } .tabs { padding: 2px 16px 14px; }
+  .qbtn { min-width: 90px; padding: 9px 14px; }
   .cal-row { grid-template-columns: 48px 32px minmax(0, 1fr) auto; gap: 10px; }
   .acct-chip { padding: 6px 12px 6px 10px; gap: 8px; max-width: 46vw; }
 }
 
-/* compact empty state inside the positions panel so its button never clips */
-#panelPositions .empty { padding: 16px 24px; }
-#panelPositions .empty b { margin-bottom: 4px; }
-#panelPositions .empty .btn { min-height: 42px; }
 .tabs { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
 
 @media (max-width: 999px) {
@@ -324,18 +312,10 @@ body.drawer-open #drawer { transform: none; } body.drawer-open #drawerScrim { op
   .chart-top .tools .tbtn { padding: 0 8px; gap: 5px; font-size: 12px; }
 }
 
-/* ---- MT5 Web terminal panel (replaces the built-in ticket and positions when Settings > Trading panel = MT5 Web) ---- */
+/* ---- MT5 Web terminal panel ---- */
 #panelMt5 { display: none; flex-direction: column; min-height: 0; min-width: 0; background: var(--panel); }
-body[data-trade="mt5web"] #panelTrade, body[data-trade="mt5web"] #panelPositions { display: none !important; }
-body:not([data-trade="mt5web"]) #panelMt5 { display: none !important; }
-body[data-trade="mt5web"][data-screen="trade"] #panelMt5, body[data-trade="mt5web"][data-screen="positions"] #panelMt5 { display: flex; flex: 1; }
 .mt5-bar { display: flex; align-items: center; gap: 10px; padding: 14px 16px 6px; }
 .mt5-bar b { font-size: 15px; } .mt5-bar .grow { flex: 1; }
 .mt5-note { padding: 0 16px 10px; font-size: 12.5px; color: var(--mute); }
 .mt5-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; }
-@media (min-width: 1000px) {
-  body[data-trade="mt5web"][data-group="terminal"] #terminal { grid-template-columns: 340px minmax(0, 1fr) 440px; }
-  body[data-trade="mt5web"] #panelMt5 { display: flex !important; grid-row: 1 / 3; grid-column: 3; }
-  body[data-trade="mt5web"] #panelChart { grid-row: 1 / 3; }
-}
 @media (max-width: 999px) { #panelMt5 { padding-bottom: calc(var(--nav-h) + 12px); } }
