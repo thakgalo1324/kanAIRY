@@ -1,6 +1,6 @@
-// Secondary screens: news, calendar, account, strategies, learn, settings, about, developer, assistant.
-import { h, icon, clear, toast, money, signed, cls, ago, dt, store } from './util.js';
-import { S, on, emit, active, isBroker, inst, digitsOf, persist, TFS, TF_SEC } from './state.js';
+// Secondary screens: news, calendar, strategies, learn, settings, about, developer, assistant.
+import { h, icon, clear, toast, signed, cls, ago, dt, store } from './util.js';
+import { S, on, emit, inst, digitsOf, persist, TFS, TF_SEC } from './state.js';
 import { api } from './api.js';
 import { candles } from './market.js';
 import { openSheet, confirmSheet } from './ui.js';
@@ -8,8 +8,6 @@ import { hooks } from './terminal.js';
 import { TEMPLATES, backtest, toXML, fromXML, validate, signalAt } from './strategy.js';
 
 const page = (id, ...kids) => clear(document.getElementById('view-' + id)).append(h('div', { class: 'inner' }, ...kids));
-const lock = (what) => h('div', { class: 'card empty' }, h('b', {}, 'Connect a broker first'), `${what} comes from your MetaTrader account.`,
-  h('div', { style: { marginTop: '12px' } }, h('button', { class: 'btn primary', onclick: () => hooks.openConnect() }, icon('link', 16), 'Connect broker')));
 
 // ---------------- news ----------------
 export function mountNews() {
@@ -64,61 +62,6 @@ export function mountCalendar() {
   hooks.onCalendar = () => { render(); if (!data) load(); };
 }
 
-// ---------------- account ----------------
-export function mountAccount() {
-  let deals = null, dealsErr = null;
-  const render = () => {
-    if (!isBroker()) { page('account', h('div', { class: 'h1' }, 'Account'), h('p', { class: 'lead' }, 'Balance, margin and performance for your connected MetaTrader account.'), lock('Account data'), accountsCard()); return; }
-    const a = S.account, c = a?.currency || 'USD', open = S.positions.reduce((s, p) => s + p.profit, 0);
-    const kpi = (k, v, extra) => h('div', { class: 'card kpi' }, h('div', { class: 'v ' + (extra || '') }, v), h('div', { class: 'k' }, k));
-    const closed = (deals || []).filter(d => d.kind === 'deal' && d.entry !== 'in');
-    const wins = closed.filter(d => d.profit > 0), loss = closed.filter(d => d.profit < 0);
-    const gp = wins.reduce((s, d) => s + d.profit, 0), gl = Math.abs(loss.reduce((s, d) => s + d.profit, 0));
-    const canvas = h('canvas', { class: 'eq-canvas', 'aria-label': 'Balance curve over the last 90 days' });
-    page('account', h('div', { class: 'h1' }, a?.name || 'Account'), h('p', { class: 'lead' }, a ? `${a.broker || active()?.broker || ''} · ${a.server} · #${a.login} · ${a.platform.toUpperCase()} · 1:${a.leverage || '—'}` : 'Loading…'),
-      h('div', { class: 'grid' }, kpi('Balance', money(a?.balance, c)), kpi('Equity', money(a?.equity, c)), kpi('Open P/L', signed(open) + ' ' + c, cls(open)), kpi('Free margin', money(a?.freeMargin, c)), kpi('Margin level', a?.marginLevel ? a.marginLevel.toFixed(0) + '%' : '—')),
-      h('div', { style: { height: '14px' } }),
-      h('div', { class: 'card' }, h('div', { class: 'row', style: { marginBottom: '8px' } }, h('b', { class: 'grow' }, 'Balance, last 90 days'), h('span', { class: 'hint' }, 'From your broker’s deal history')), dealsErr ? h('div', { class: 'err' }, dealsErr) : canvas,
-        deals && !closed.length ? h('p', { class: 'hint' }, 'No closed trades in this period yet.') : null),
-      h('div', { style: { height: '14px' } }),
-      h('div', { class: 'grid' }, kpi('Closed trades (90d)', closed.length), kpi('Win rate', closed.length ? (wins.length / closed.length * 100).toFixed(0) + '%' : '—'), kpi('Profit factor', gl ? (gp / gl).toFixed(2) : (gp ? '∞' : '—')),
-        kpi('Best trade', wins.length ? signed(Math.max(...wins.map(d => d.profit))) : '—', 'up'), kpi('Worst trade', loss.length ? signed(Math.min(...loss.map(d => d.profit))) : '—', 'down')),
-      h('div', { style: { height: '14px' } }), accountsCard());
-    if (deals) drawBalance(canvas, deals, a?.balance || 0);
-  };
-  function accountsCard() {
-    return h('div', { class: 'card' }, h('div', { class: 'row', style: { marginBottom: '8px' } }, h('b', { class: 'grow' }, 'Linked accounts'), h('button', { class: 'btn sm primary', onclick: () => hooks.openConnect() }, icon('plus', 14), 'Add account')),
-      S.accounts.length ? S.accounts.map(acc => h('div', { class: 'setting' }, h('div', { class: 'grow' }, h('div', { class: 't' }, acc.label), h('div', { class: 'd' }, `${acc.server} · ${acc.platform.toUpperCase()}${acc.id === S.activeId ? ' · active' : ''}`)),
-        acc.id === S.activeId ? h('button', { class: 'btn sm danger', onclick: () => hooks.disconnect(acc.id) }, icon('logout', 14), 'Disconnect') : [h('button', { class: 'btn sm', onclick: () => hooks.switchAccount(acc.id) }, 'Switch'), h('button', { class: 'btn sm danger', onclick: () => hooks.disconnect(acc.id) }, 'Remove')]))
-        : h('p', { class: 'hint' }, 'No accounts linked. Prices and charts still work without one.'));
-  }
-  async function load() {
-    if (!isBroker()) { render(); return; }
-    deals = null; dealsErr = null; render();
-    try { deals = (await api.history(90)).deals; } catch (e) { dealsErr = e.message; }
-    render();
-  }
-  function drawBalance(cv, ds, bal) {
-    const r = cv.getBoundingClientRect(), dpr = devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr;
-    const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
-    const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-    const ev = ds.filter(d => d.time).slice().sort((a, b) => a.time - b.time);
-    const net = ev.reduce((s, d) => s + d.profit + (d.swap || 0) + (d.commission || 0), 0);
-    let v = bal - net; const pts = [{ t: (ev[0]?.time || Date.now() / 1000) - 1, v }];
-    ev.forEach(d => { v += d.profit + (d.swap || 0) + (d.commission || 0); pts.push({ t: d.time, v }); });
-    pts.push({ t: Date.now() / 1000, v });
-    const W = r.width, H = r.height, lo = Math.min(...pts.map(p => p.v)), hi = Math.max(...pts.map(p => p.v)), span = hi - lo || 1, t0 = pts[0].t, t1 = pts[pts.length - 1].t || t0 + 1;
-    const X = t => 8 + (t - t0) / ((t1 - t0) || 1) * (W - 16), Y = val => H - 18 - (val - lo) / span * (H - 36);
-    ctx.strokeStyle = css('--line'); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, H - 8.5); ctx.lineTo(W, H - 8.5); ctx.stroke();
-    ctx.beginPath(); pts.forEach((p, i) => { const x = X(p.t), y = i ? Y(p.v) : Y(p.v); if (i) { ctx.lineTo(x, Y(pts[i - 1].v)); ctx.lineTo(x, y); } else ctx.moveTo(x, y); });
-    ctx.strokeStyle = css('--brand'); ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = css('--mute'); ctx.font = '11px system-ui'; ctx.fillText(money(hi, S.account?.currency), 8, 12); ctx.fillText(money(lo, S.account?.currency), 8, H - 12);
-  }
-  hooks.onAccount = load;
-  on('snapshot', () => { if (document.body.dataset.screen === 'account') render(); });
-  on('mode', () => { deals = null; });
-}
-
 // ---------------- strategies ----------------
 export function mountStrategies() {
   let strat = TEMPLATES.ema_cross(), result = null, running = false, watching = false, log = store.get('signalLog', []), watchTimer = null, lastBar = null;
@@ -150,11 +93,7 @@ export function mountStrategies() {
   const download = (name, text) => { const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: 'application/xml' })), download: name }); document.body.append(a); a.click(); a.remove(); };
 
   async function fetchBars(n) {
-    let all = await candles(S.symbol, strat.timeframe, Math.min(n, 1000));
-    while (isBroker() && all.length < n && all.length) {
-      const more = await candles(S.symbol, strat.timeframe, Math.min(1000, n - all.length), all[0].t);
-      if (!more.length) break; all = more.concat(all);
-    }
+    const all = await candles(S.symbol, strat.timeframe, Math.min(n, 1000));
     return all;
   }
   async function run() {
@@ -172,7 +111,7 @@ export function mountStrategies() {
     if (result) drawEquity();
   }
   function resultCard() {
-    const s = result.stats, c = S.account?.currency || 'quote ccy';
+    const s = result.stats, c = 'quote ccy';
     const k = (l, v, x) => h('div', { class: 'kpi' }, h('div', { class: 'v ' + (x || '') }, v), h('div', { class: 'k' }, l));
     return h('div', { class: 'card stack', style: { marginTop: '12px' } },
       h('div', { class: 'row' }, h('b', { class: 'grow' }, `Result · ${result.bars} bars of ${result.symbol} ${result.tf}`), h('button', { class: 'btn sm', onclick: () => { hooks.markers = result.trades.flatMap(t => [{ t: t.entryT, side: t.side === 'long' ? 'buy' : 'sell' }, { t: t.exitT, side: t.side === 'long' ? 'sell' : 'buy', color: 'var(--mute)' }]); emit('markers'); hooks.showScreen('chart'); toast('Trades marked on the chart'); } }, 'Show on chart')),
@@ -235,11 +174,11 @@ export function mountLearn() {
 }
 
 export function mountAbout() {
-  page('about', h('div', { class: 'h1' }, 'About KanAIRY'), h('p', { class: 'lead' }, 'A MetaTrader terminal that runs in your browser or on your phone.'),
+  page('about', h('div', { class: 'h1' }, 'About KanAIRY'), h('p', { class: 'lead' }, 'Charts, news and tools in your browser, with the MT5 Web terminal for trading.'),
     h('div', { class: 'card prose' },
-      h('h3', {}, 'What it does'), h('ul', {}, ['Connects to any MetaTrader 4 or 5 broker through MetaApi, the same servers your desktop terminal uses.', 'Shows live prices, candlestick charts in nine timeframes, 25+ indicators and drawing tools.', 'Places market, limit, stop and stop-limit orders with stop loss and take profit, and lets you drag those levels on the chart.', 'Tracks open positions, pending orders, history and account balance.', 'Streams market news and the economic calendar from public sources.', 'Tests rule-based strategies on real price history in the Strategy lab.']),
-      h('h3', {}, 'How your login is handled'), h('p', {}, 'Your broker password is sent once to MetaApi to link the account and is not stored by KanAIRY. The app keeps a signed session token in this browser, which you can remove any time with Disconnect.'),
-      h('h3', {}, 'Where prices come from'), h('p', {}, 'With a broker connected, prices and candles come from that broker’s own feed. Without one, the app shows delayed public market data so you can look around first. Public futures-based prices for gold, oil and indices can differ from your broker’s spot prices.'),
+      h('h3', {}, 'What it does'), h('ul', {}, ['Shows candlestick charts in nine timeframes with 25+ indicators and drawing tools.', 'Sets price alerts that notify you when a level is reached.', 'Streams market news and the economic calendar from public sources.', 'Tests rule-based strategies on real price history in the Strategy lab.', 'Embeds the MetaQuotes MT5 Web terminal so you can log in with your broker and trade.']),
+      h('h3', {}, 'How your login is handled'), h('p', {}, 'KanAIRY never sees your broker login. You enter it inside the MT5 Web terminal, which belongs to MetaQuotes and your broker. This app stores no accounts and no passwords.'),
+      h('h3', {}, 'Where prices come from'), h('p', {}, 'Charts and the watchlist use delayed public market data. Public futures-based prices for gold, oil and indices can differ from your broker’s spot prices, so use the MT5 terminal’s own quotes when you place a trade.'),
       h('h3', {}, 'Risk warning'), h('p', {}, 'Trading leveraged products carries a high risk of losing money. KanAIRY is a tool, not financial advice, and makes no promise of profit.')));
 }
 
@@ -264,14 +203,11 @@ export function mountSettings() {
       h('div', { class: 'card' },
         row('Theme', 'Dark suits low light; light suits daylight.', h('div', { class: 'seg' }, ['dark', 'light'].map(t => h('button', { 'aria-pressed': String(S.settings.theme === t), onclick: () => { set('theme', t); render(); } }, t[0].toUpperCase() + t.slice(1))))),
         row('Colour-blind palette', 'Uses blue and orange instead of green and red.', toggle('colorblind')),
-        row('Trading panel', 'MT5 Web puts MetaQuotes\u2019 terminal next to your chart and lets you log in with any supported broker. Built-in uses the order ticket in this app (needs a broker gateway).', h('div', { class: 'seg' }, [['mt5web', 'MT5 Web'], ['builtin', 'Built-in']].map(([v, l]) => h('button', { 'aria-pressed': String(S.settings.tradeMode === v || (v === 'mt5web' && S.settings.tradeMode == null)), onclick: () => { set('tradeMode', v); render(); } }, l)))),
         row('MT5 terminal address', 'Optional. Your broker\u2019s own web terminal address (https), or leave empty for the MetaQuotes default.', h('input', { class: 'input', style: { width: '190px' }, type: 'url', placeholder: 'https://\u2026', value: S.settings.mt5Url || '', onchange: e => set('mt5Url', e.target.value.trim()) })),
-        row('Confirm orders', 'Show a summary before every order is sent. Turning this off sends orders immediately.', toggle('confirmOrders')),
-        row('Default volume', 'Lots pre-filled in the order ticket.', h('input', { class: 'input', style: { width: '90px' }, type: 'number', step: '0.01', min: '0.01', value: S.settings.defaultVolume, onchange: e => set('defaultVolume', Math.max(0.01, parseFloat(e.target.value) || 0.01)) })),
         row('Alerts and signals', 'Allow browser notifications for price alerts and strategy signals.', h('button', { class: 'btn sm', onclick: async () => { if (!('Notification' in window)) { toast('This browser does not support notifications.', 'error'); return; } const r = await Notification.requestPermission(); toast('Notifications ' + r); } }, 'Enable'))),
       h('div', { style: { height: '14px' } }),
-      h('div', { class: 'card' }, row('Clear local data', 'Removes linked accounts, favourites, drawings, alerts and settings from this device. Your broker account is not affected.',
-        h('button', { class: 'btn sm danger', onclick: async () => { if (await confirmSheet({ title: 'Clear local data', message: 'This signs you out and removes everything KanAIRY saved on this device.', okText: 'Clear everything', danger: true })) { Object.keys(localStorage).filter(k => k.startsWith('kanairy.')).forEach(k => localStorage.removeItem(k)); location.reload(); } } }, 'Clear'))));
+      h('div', { class: 'card' }, row('Clear local data', 'Removes favourites, drawings, alerts and settings from this device. Your broker account is not affected.',
+        h('button', { class: 'btn sm danger', onclick: async () => { if (await confirmSheet({ title: 'Clear local data', message: 'This removes everything KanAIRY saved on this device.', okText: 'Clear everything', danger: true })) { Object.keys(localStorage).filter(k => k.startsWith('kanairy.')).forEach(k => localStorage.removeItem(k)); location.reload(); } } }, 'Clear'))));
   };
   hooks.onSettings = render;
 }
