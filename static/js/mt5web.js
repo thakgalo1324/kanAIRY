@@ -16,17 +16,32 @@ export function terminalUrl() {
 
 let panelEl = null, shownUrl = '';
 
+const wide = () => matchMedia('(min-width: 1000px)').matches;
+let forceEmbed = false;
+
+// Phones: MetaQuotes' terminal often hangs when it is shown inside another page (browsers block the storage it needs),
+// so on a phone the Trade tab is a launcher that opens it as its own page. "Load it here" still tries the embedded one.
+function renderLauncher(url) {
+  clear(panelEl).append(h('div', { class: 'mt5-launch' },
+    h('b', {}, 'Trade with MT5'),
+    h('p', {}, 'The MetaTrader 5 terminal opens as its own page, so it loads reliably on your phone. Log in with your broker there, then come back here for charts, alerts and news.'),
+    h('a', { class: 'btn primary block', href: url, target: '_blank', rel: 'noopener' }, 'Open MT5 terminal'),
+    h('button', { class: 'btn block', onclick: () => { forceEmbed = true; shownUrl = ''; render(); } }, 'Load it here instead'),
+    h('p', { class: 'hint' }, 'Your password goes to MetaQuotes and your broker, not to KanAIRY. Using your broker\u2019s own web terminal? Set its address in Settings.')));
+}
+
 function render() {
   const url = terminalUrl();
   shownUrl = url;
-  const status = h('div', { class: 'mt5-status' }, 'Loading the MT5 terminal…');
+  if (!wide() && !forceEmbed) { renderLauncher(url); return; }
+  const status = h('div', { class: 'mt5-status' }, 'Loading the MT5 terminal\u2026');
   const frame = h('iframe', { class: 'mt5-frame', src: url, title: 'MetaTrader 5 Web Terminal', allow: 'fullscreen; clipboard-write', allowfullscreen: '' });
   let slow = null;
   frame.addEventListener('load', () => { clearTimeout(slow); status.remove(); });
   slow = setTimeout(() => {
     if (!status.isConnected) return;
-    clear(status).append(h('span', {}, 'Still loading. Some phones and networks block the terminal inside another page. '),
-      h('a', { class: 'btn sm primary', href: url, target: '_blank', rel: 'noopener' }, 'Open the terminal in a new tab'));
+    clear(status).append(h('span', {}, 'Still loading. Some devices and networks block the terminal inside another page. '),
+      h('a', { class: 'btn sm primary', href: url, target: '_blank', rel: 'noopener' }, 'Open it in a new tab'));
   }, 12000);
   clear(panelEl).append(
     h('div', { class: 'mt5-bar' }, h('b', {}, 'MT5 Web terminal'), h('span', { class: 'grow' }),
@@ -39,7 +54,7 @@ function render() {
 export function refreshMt5Web() {
   if (!panelEl) return;
   const visible = panelEl.getClientRects().length > 0;
-  if (visible && (!panelEl.querySelector('iframe') || shownUrl !== terminalUrl())) render();
+  if (visible && ((!panelEl.querySelector('iframe') && !panelEl.querySelector('.mt5-launch')) || shownUrl !== terminalUrl())) render();
 }
 
 export function mountMt5Web(panel) {
