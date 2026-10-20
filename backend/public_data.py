@@ -1,7 +1,7 @@
 """Public market data, news and economic calendar.
 
-This is what the app shows before a broker is connected (and always for news
-and the calendar). Everything here comes from real third-party feeds:
+This is what the app shows for prices, charts, news and the calendar. Everything
+here comes from real third-party feeds:
   - prices/candles: Yahoo Finance chart endpoint (no key)
   - headlines: publishers' own RSS feeds
   - calendar: the weekly Forex Factory/FairEconomy JSON export
@@ -18,7 +18,9 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-UA = {"User-Agent": "Mozilla/5.0 (compatible; KanAIRY/3.0; +https://github.com/Matlala603/KanAIRy)"}
+UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      "Accept": "application/json,text/xml,application/xml,text/html;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9"}
+YAHOO_HOSTS = ("query1.finance.yahoo.com", "query2.finance.yahoo.com")
 
 
 def _fx(sym: str, name: str, digits: int = 5):
@@ -107,21 +109,41 @@ class PublicData:
     def __init__(self, client: Optional[httpx.AsyncClient] = None):
         self.http = client or httpx.AsyncClient(timeout=15, headers=UA, follow_redirects=True)
         self.cache = Cache()
-        self.sem = asyncio.Semaphore(8)
+        self.sem = asyncio.Semaphore(6)
+        self.last_feed = "not called yet"
 
     # ---------- Yahoo ----------
     async def _chart(self, ticker: str, interval: str, rng: str) -> Dict[str, Any]:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
-        async with self.sem:
-            r = await self.http.get(url, params={"interval": interval, "range": rng, "includePrePost": "false"})
-        if r.status_code == 429:
-            raise PublicError(429, "The public price feed is rate-limiting requests. Try again shortly.")
-        if r.status_code >= 400:
-            raise PublicError(502, f"The public price feed returned {r.status_code}.")
-        body = r.json().get("chart", {})
-        if body.get("error") or not body.get("result"):
-            raise PublicError(404, "No data for this instrument right now.")
-        return body["result"][0]
+        """Ask Yahoo for a chart. Tries both of its hosts, because one is often blocked or rate-limited for a given server."""
+        last = None
+        for host in YAHOO_HOSTS:
+            url = f"https://{host}/v8/finance/chart/{ticker}"
+            try:
+                async with self.sem:
+                    r = await self.http.get(url, params={"interval": interval, "range": rng, "includePrePost": "false"})
+            except httpx.HTTPError as e:
+                last = PublicError(502, "Could not reach the public price feed.")
+                self.last_feed = f"{host}: {type(e).__name__}"
+                continue
+            if r.status_code == 429:
+                last = PublicError(429, "The public price feed is rate-limiting requests. Try again shortly.")
+                self.last_feed = f"{host}: 429"
+                continue
+            if r.status_code >= 400:
+                last = PublicError(502, f"The public price feed returned {r.status_code}.")
+                self.last_feed = f"{host}: {r.status_code}"
+                continue
+            try:
+                body = r.json().get("chart", {})
+            except ValueError:
+                last = PublicError(502, "The public price feed sent an unreadable answer.")
+                self.last_feed = f"{host}: bad json"
+                continue
+            if body.get("error") or not body.get("result"):
+                raise PublicError(404, "No data for this instrument right now.")
+            self.last_feed = f"{host}: ok"
+            return body["result"][0]
+        raise last or PublicError(502, "Could not reach the public price feed.")
 
     async def candles(self, symbol: str, timeframe: str, limit: int = 600) -> List[Dict[str, Any]]:
         inst = BY_SYMBOL.get(symbol)
