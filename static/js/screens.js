@@ -176,8 +176,8 @@ export function mountLearn() {
 export function mountAbout() {
   page('about', h('div', { class: 'h1' }, 'About KanAIRY'), h('p', { class: 'lead' }, 'Charts, news and tools in your browser, with the MT5 Web terminal for trading.'),
     h('div', { class: 'card prose' },
-      h('h3', {}, 'What it does'), h('ul', {}, ['Shows candlestick charts in nine timeframes with 25+ indicators and drawing tools.', 'Sets price alerts that notify you when a level is reached.', 'Streams market news and the economic calendar from public sources.', 'Tests rule-based strategies on real price history in the Strategy lab.', 'Embeds the MetaQuotes MT5 Web terminal so you can log in with your broker and trade.']),
-      h('h3', {}, 'How your login is handled'), h('p', {}, 'KanAIRY never sees your broker login. You enter it inside the MT5 Web terminal, which belongs to MetaQuotes and your broker. This app stores no accounts and no passwords.'),
+      h('h3', {}, 'What it does'), h('ul', {}, ['Shows candlestick charts in nine timeframes with 25+ indicators and drawing tools.', 'Sets price alerts that notify you when a level is reached.', 'Streams market news and the economic calendar from public sources.', 'Tests rule-based strategies on real price history in the Strategy lab.', 'Opens your broker\u2019s MT5 web terminal from the Trade tab so you can log in and trade.']),
+      h('h3', {}, 'How your login is handled'), h('p', {}, 'KanAIRY never sees your broker login. You enter it in your broker\u2019s own MT5 web terminal. This app stores no accounts and no passwords.'),
       h('h3', {}, 'Where prices come from'), h('p', {}, 'Charts and the watchlist use delayed public market data. Public futures-based prices for gold, oil and indices can differ from your broker’s spot prices, so use the MT5 terminal’s own quotes when you place a trade.'),
       h('h3', {}, 'Risk warning'), h('p', {}, 'Trading leveraged products carries a high risk of losing money. KanAIRY is a tool, not financial advice, and makes no promise of profit.')));
 }
@@ -203,7 +203,7 @@ export function mountSettings() {
       h('div', { class: 'card' },
         row('Theme', 'Dark suits low light; light suits daylight.', h('div', { class: 'seg' }, ['dark', 'light'].map(t => h('button', { 'aria-pressed': String(S.settings.theme === t), onclick: () => { set('theme', t); render(); } }, t[0].toUpperCase() + t.slice(1))))),
         row('Colour-blind palette', 'Uses blue and orange instead of green and red.', toggle('colorblind')),
-        row('MT5 terminal address', 'Optional. Your broker\u2019s own web terminal address (https), or leave empty for the MetaQuotes default.', h('input', { class: 'input', style: { width: '190px' }, type: 'url', placeholder: 'https://\u2026', value: S.settings.mt5Url || '', onchange: e => set('mt5Url', e.target.value.trim()) })),
+        row('Broker web terminal address', 'The address of your broker\u2019s MT5 web terminal (https). Leave empty to use MetaQuotes\u2019 demo terminal. You can also set it on the Trade tab.', h('input', { class: 'input', style: { width: '190px' }, type: 'url', placeholder: 'https://\u2026', value: S.settings.mt5Url || '', onchange: e => set('mt5Url', e.target.value.trim()) })),
         row('Alerts and signals', 'Allow browser notifications for price alerts and strategy signals.', h('button', { class: 'btn sm', onclick: async () => { if (!('Notification' in window)) { toast('This browser does not support notifications.', 'error'); return; } const r = await Notification.requestPermission(); toast('Notifications ' + r); } }, 'Enable'))),
       h('div', { style: { height: '14px' } }),
       h('div', { class: 'card' }, row('Clear local data', 'Removes favourites, drawings, alerts and settings from this device. Your broker account is not affected.',
