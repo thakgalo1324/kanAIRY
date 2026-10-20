@@ -76,6 +76,16 @@ async def health():
     return {"status": "ok", "time": int(time.time())}
 
 
+@app.get("/api/health/feed")
+async def health_feed():
+    """Open this in a browser to see whether the server can reach the price feed (EURUSD test)."""
+    try:
+        res = await public._chart("EURUSD=X", "1h", "1d")
+        return {"feed": "ok", "points": len(res.get("timestamp") or []), "detail": public.last_feed}
+    except PublicError as e:
+        return {"feed": "failing", "error": e.message, "detail": public.last_feed}
+
+
 # ---------- public data (no account needed) ----------
 @app.get("/api/public/instruments")
 async def public_instruments():
