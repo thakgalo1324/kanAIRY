@@ -4,12 +4,14 @@
 import { h, clear } from './util.js';
 import { S, on } from './state.js';
 
-// MetaQuotes' documented widget address (mql5.com article "Embed MetaTrader 4/5 WebTerminal on your website").
-export const DEFAULT_MT5_URL = 'https://trade.mql5.com/trade?version=5&lang=en&save_password=off&trade_server=MetaQuotes-Demo';
+// MetaQuotes' documented embed address (mql5.com article 3024, "Embed MetaTrader 4/5 WebTerminal on your website").
+// The old trade.mql5.com address now only redirects here.
+export const DEFAULT_MT5_URL = 'https://metatraderweb.app/trade?demo_all_servers=1&startup_mode=open_demo&startup_version=5&lang=en&save_password=off';
 
 export function terminalUrl() {
   const u = String(S.settings.mt5Url || '').trim();
-  return /^https:\/\//i.test(u) ? u : DEFAULT_MT5_URL;
+  if (!/^https:\/\//i.test(u)) return DEFAULT_MT5_URL;
+  return u.replace(/^https:\/\/trade\.mql5\.com\//i, 'https://metatraderweb.app/');   // MetaQuotes moved the web terminal
 }
 
 let panelEl = null, shownUrl = '';
@@ -17,11 +19,20 @@ let panelEl = null, shownUrl = '';
 function render() {
   const url = terminalUrl();
   shownUrl = url;
+  const status = h('div', { class: 'mt5-status' }, 'Loading the MT5 terminal…');
+  const frame = h('iframe', { class: 'mt5-frame', src: url, title: 'MetaTrader 5 Web Terminal', allow: 'fullscreen; clipboard-write', allowfullscreen: '' });
+  let slow = null;
+  frame.addEventListener('load', () => { clearTimeout(slow); status.remove(); });
+  slow = setTimeout(() => {
+    if (!status.isConnected) return;
+    clear(status).append(h('span', {}, 'Still loading. Some phones and networks block the terminal inside another page. '),
+      h('a', { class: 'btn sm primary', href: url, target: '_blank', rel: 'noopener' }, 'Open the terminal in a new tab'));
+  }, 12000);
   clear(panelEl).append(
     h('div', { class: 'mt5-bar' }, h('b', {}, 'MT5 Web terminal'), h('span', { class: 'grow' }),
       h('a', { class: 'btn sm', href: url, target: '_blank', rel: 'noopener' }, 'Open in new tab')),
-    h('div', { class: 'mt5-note' }, 'Log in with any broker that supports the MetaQuotes web terminal. Your password goes to MetaQuotes and your broker, not to KanAIRY. If this stays blank, tap \u201cOpen in new tab\u201d.'),
-    h('iframe', { class: 'mt5-frame', src: url, title: 'MetaTrader 5 Web Terminal', allow: 'fullscreen; clipboard-write', referrerpolicy: 'strict-origin-when-cross-origin' }));
+    h('div', { class: 'mt5-note' }, 'Log in with any broker that supports the MetaQuotes web terminal. Your password goes to MetaQuotes and your broker, not to KanAIRY.'),
+    status, frame);
 }
 
 // Load the terminal only once its panel is actually on screen (it is heavy), and again if the address changes.
