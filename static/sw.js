@@ -1,6 +1,6 @@
 // Caches the app shell only. API calls always go to the network, so prices
 // are never served stale from a cache.
-const CACHE = 'kanairy-shell-v10';
+const CACHE = 'kanairy-shell-v11';
 const MODULES = ['api', 'chart', 'indicators', 'main', 'market', 'mt5web', 'screens', 'state', 'strategy', 'terminal', 'ui', 'util'].map(m => `/static/js/${m}.js`);
 const SHELL = ['/', '/static/css/app.css', ...MODULES, '/static/img/icon.svg', '/manifest.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL).catch(() => Promise.all(SHELL.map(u => c.add(u).catch(() => {}))))).then(() => self.skipWaiting())); });
