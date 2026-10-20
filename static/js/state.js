@@ -15,7 +15,7 @@ export const S = {
   chartType: store.get('chartType', 'candles'),
   indicators: store.get('indicators', [{ uid: 1, id: 'ema', params: { period: 21 } }]),
   alerts: store.get('alerts', []),               // [{id,symbol,price,dir,created,fired}]
-  settings: { theme: 'light', colorblind: false, mt5Url: '', ...store.get('settings', {}) },
+  settings: { theme: 'light', colorblind: false, mt5Url: '', mt5Embed: false, ...store.get('settings', {}) },
   online: true,
   catFilter: 'Favorites',
   query: '',
