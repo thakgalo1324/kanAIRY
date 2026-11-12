@@ -1,41 +1,17 @@
-# KanAIRY — MetaTrader terminal in the browser
+# Kanairy (VPS edition)
 
-Trade with any MetaTrader 4 or 5 broker from a browser or phone. FastAPI backend, MetaApi for the broker link, a dependency-free JavaScript front end.
+Your VPS runs MT5, the Kanairy EA and the Kanairy server. The phone app is the remote: log in, import your strategy XML, press Start, watch trades.
 
-## What it does
-- Searches every MT4/MT5 broker and server MetaApi knows, then connects with your account number, password and server.
-- Live broker prices, account, positions, pending orders and deal history.
-- Market, limit, stop and stop-limit orders with SL/TP; drag SL/TP/pending-order lines on the chart; partial close.
-- Canvas chart: candles, hollow, Heikin-Ashi, bars, line, area; 9 timeframes; 25 indicators computed on real candles; drawing tools; price alerts.
-- Without a broker connected: delayed public prices and charts (Yahoo Finance), news (publisher RSS feeds) and the economic calendar (FairEconomy).
-- Strategy lab: rule-based strategies, deterministic backtest on real history, XML import/export, live signal alerts. It never places trades by itself.
+    app/   Android app (black and white UI). Build it with GitHub Actions.
+    vps/   Kanairy server for the VPS (Node.js, no dependencies). Start here: vps/README-VPS.md
+    mt5/   KanairyEA.mq5 (the trading EA) and KanairyTest.mq5 (one demo BUY and SELL to prove orders work)
 
-## Run
-```bash
-cp .env.example .env     # fill in METAAPI_TOKEN and SESSION_SECRET
-./start.sh               # or: ./deploy.sh (Docker)
-```
-Open http://localhost:8000. Heroku-style hosts use the `Procfile`.
+## Order
+1. VPS: follow `vps/README-VPS.md` (about 10 minutes).
+2. Phone: push this folder to GitHub (keep the `.github` folder). Open Actions, wait for the green tick, then Releases and install `Kanairy.apk`.
+3. App: Setup, enter `http://YOUR_VPS_IP:8766` and the app key. Account, enter your broker login, Launch MT5. Strategy, import XML. Live, hold the crown.
+4. Use a demo account first. Also sign in to the same account in the MT5 app to watch trades fly.
 
-| Variable | Purpose |
-|---|---|
-| `METAAPI_TOKEN` | Your MetaApi token (required) |
-| `SESSION_SECRET` | Random 16+ character secret that signs session tokens (required) |
-| `ALLOWED_ORIGINS` | Comma-separated extra origins for CORS; empty = same-origin only |
+You can also import your own `.mq5` EA from the Strategy tab; the server compiles and runs it in MT5 (see `vps/README-VPS.md`).
 
-## Security notes
-- The broker password is sent once to MetaApi, never stored or logged by this app. A salted scrypt proof is stored in the MetaApi account metadata so that re-linking an existing account requires the same password.
-- Sessions are signed 7-day tokens kept in the browser (`localStorage`). Logout closes the server session but a stolen token stays valid until it expires; rotate `SESSION_SECRET` to invalidate all of them.
-- Serve over HTTPS. Do not commit `.env`.
-- Trading is risky. This is a tool, not advice.
-
-## Tests (no network needed)
-```bash
-python3 tests/test_backend.py      # backend logic with fake MetaApi
-node tests/indicators_check.mjs    # dump indicators for comparison with a reference
-node tests/strategy_check.mjs      # backtest determinism and accounting
-node tests/mock_server.mjs & node tests/ui_smoke.mjs   # UI in Chromium against a mock API (needs playwright)
-```
-`tests/mock_server.mjs` serves synthetic data for UI testing only and is not part of the app.
-
-Built by Thakgalo Matlala, Soshanguve, Pretoria.
+Strategy rules are checked when each candle closes. Every order carries a stop loss on the broker's side. Guard rails (max open trades, orders per signal, cooldown, daily orders, daily loss, max spread) live on the server.

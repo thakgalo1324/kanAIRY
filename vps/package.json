@@ -1,0 +1,9 @@
+{
+  "name": "kanairy-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Kanairy server for your VPS. Runs your strategy and talks to the MT5 EA.",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}

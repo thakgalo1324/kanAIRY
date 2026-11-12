@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kanairy</title>
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="img/logo.png" type="image/png">
+<link rel="stylesheet" href="css/lux.css">
+<link rel="stylesheet" href="css/glass.css">
+</head>
+<body>
+<div class="ambient" aria-hidden="true"><i></i><i></i><i></i></div>
+<div id="shell">
+  <header class="top"><div class="mark"><img src="img/logo.png" alt=""><span>Kanairy</span></div><div class="pill" id="conn"><span class="dot"></span><span id="connTxt">Starting</span></div></header>
+  <main>
+    <section class="screen" id="s-live"></section>
+    <section class="screen" id="s-strategy"></section>
+    <section class="screen" id="s-account"></section>
+    <section class="screen" id="s-setup"></section>
+  </main>
+</div>
+<nav class="bar" id="nav" aria-label="Main"></nav>
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+window.addEventListener('error', function (e) { if (window.__luxOk) return; var d = document.getElementById('shell'); d.insertAdjacentHTML('afterbegin', '<p style="padding:20px;color:#fff">Kanairy could not start: ' + (e.message || 'script error') + '</p>'); }, true);
+</script>
+<script type="module" src="js/lux/app.js"></script>
+</body>
+</html>

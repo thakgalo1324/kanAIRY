@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Kanairy</string>
+    <string name="a11y_desc">Lets Kanairy read the MT5 chart, tap buttons and place orders for you. Chart reading and decisions run on this phone.</string>
+</resources>

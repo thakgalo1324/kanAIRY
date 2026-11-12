@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<strategy name="Gold Cluster Scalper">
+  <timeframe>M1</timeframe>
+  <lots>0.01</lots>
+  <stoploss atr="1.5" period="10"/>
+  <takeprofit atr="0.35" period="10"/>
+  <rule side="long" action="enter">
+    <compare a="ema:3" op="gt" b="ema:8"/>
+    <compare a="close" op="gt" b="ema:3"/>
+    <compare a="rsi:5" op="gt" b="58"/>
+    <compare a="rsi:5" op="lt" b="88"/>
+    <compare a="ema:8" op="gt" b="ema:21"/>
+  </rule>
+  <rule side="short" action="enter">
+    <compare a="ema:3" op="lt" b="ema:8"/>
+    <compare a="close" op="lt" b="ema:3"/>
+    <compare a="rsi:5" op="lt" b="42"/>
+    <compare a="rsi:5" op="gt" b="12"/>
+    <compare a="ema:8" op="lt" b="ema:21"/>
+  </rule>
+  <rule side="long" action="exit">
+    <cross a="ema:3" b="ema:8" dir="below"/>
+  </rule>
+  <rule side="short" action="exit">
+    <cross a="ema:3" b="ema:8" dir="above"/>
+  </rule>
+</strategy>

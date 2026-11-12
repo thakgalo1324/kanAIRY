@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<strategy name="SMC Gold Scalper">
+  <timeframe>M1</timeframe>
+  <lots>0.01</lots>
+  <stoploss atr="1.2" period="14"/>
+  <takeprofit atr="1" period="14"/>
+  <rule side="long" action="enter">
+    <compare a="ema:21" op="gt" b="ema:50"/>
+    <compare a="close" op="gt" b="supertrend:up:10:2"/>
+    <compare a="adx:14" op="gt" b="15"/>
+    <cross a="close" b="ema:9" dir="above"/>
+  </rule>
+  <rule side="short" action="enter">
+    <compare a="ema:21" op="lt" b="ema:50"/>
+    <compare a="close" op="lt" b="supertrend:down:10:2"/>
+    <compare a="adx:14" op="gt" b="15"/>
+    <cross a="close" b="ema:9" dir="below"/>
+  </rule>
+</strategy>
