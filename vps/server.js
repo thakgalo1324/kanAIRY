@@ -509,6 +509,12 @@ const eaServer = http.createServer(async (req, res) => {
 appServer.listen(cfg.appPort, cfg.appHost || '0.0.0.0', () => log(`App API on port ${cfg.appPort}`));
 eaServer.on('error', e => log(e.code === 'EADDRINUSE' ? `EA bridge: port ${cfg.eaPort} is used by another program (for example IIS or a web server). Stop it, then restart Kanairy server.` : 'EA bridge error: ' + e.message));
 eaServer.listen(cfg.eaPort, cfg.eaHost || '127.0.0.1', () => log(`EA bridge on ${cfg.eaHost || '127.0.0.1'}:${cfg.eaPort}`));
+// The first account also answers on plain 127.0.0.1, so an EA compiled before the per-person addresses existed still connects.
+if (cfg.eaHost === '127.0.1.1') {
+  const alt = http.createServer((q, r) => eaServer.emit('request', q, r));
+  alt.on('error', () => { /* port taken: the private address still works */ });
+  alt.listen(cfg.eaPort, '127.0.0.1', () => log('EA bridge also on 127.0.0.1:' + cfg.eaPort));
+}
 autoSetup();
 if (!cfg.quiet) showAddress();
 
