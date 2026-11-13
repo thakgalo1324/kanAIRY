@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<strategy name="Test Fast (demo only)">
+  <timeframe>M1</timeframe>
+  <lots>0.01</lots>
+  <stoploss atr="1.5" period="14"/>
+  <takeprofit atr="1" period="14"/>
+  <rule side="long" action="enter">
+    <compare a="ema:5" op="gt" b="ema:13"/>
+  </rule>
+  <rule side="short" action="enter">
+    <compare a="ema:5" op="lt" b="ema:13"/>
+  </rule>
+</strategy>

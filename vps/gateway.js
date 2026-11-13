@@ -126,8 +126,8 @@ function verify(req, body, key) {
   return true;
 }
 const fails = new Map(); // name -> { n, until }
-const locked = name => { const f = fails.get(name); return f && f.until > Date.now(); };
-function failed(name) { const f = fails.get(name) || { n: 0, until: 0 }; f.n++; if (f.n >= 8) { f.until = Date.now() + 5 * 60000; f.n = 0; log(`Too many wrong PINs for ${name}. Locked for 5 minutes.`); } fails.set(name, f); }
+const locked = () => false; // never lock anyone out
+function failed() { /* a wrong PIN just gets a plain 401, no lockout */ }
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{1,19}$/;
 function allocN() { const used = new Set(Object.values(users).map(u => u.n)); for (let i = 1; i <= 240; i++) if (!used.has(i)) return i; return 0; }

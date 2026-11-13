@@ -38,6 +38,8 @@ for (const [k, v] of Object.entries(defaults)) if (cfg[k] === undefined) { cfg[k
 // MetaTrader's WebRequest only talks to the standard web ports (80 for http), so the EA bridge lives on port 80.
 if (!cfg.eaPort || Number(cfg.eaPort) === 8765) { cfg.eaPort = 80; fresh = true; }
 if (fresh) fs.writeFileSync(CFG_FILE, JSON.stringify(cfg, null, 2));
+// Every private address (127.0.1.1 to 127.0.1.10) plus plain 127.0.0.1, so MT5 already allows them all, for every account.
+const allowList = () => { const a = ['127.0.0.1']; for (let i = 1; i <= 10; i++) a.push('127.0.1.' + i); return a.flatMap(h => ['http://' + h, 'https://' + h]).join(';'); };
 const eaUrl = () => 'http://' + (cfg.eaHost || '127.0.0.1') + (Number(cfg.eaPort) === 80 ? '' : ':' + cfg.eaPort);
 
 // ---------- strategy engine (the same code as the app's Strategy lab) ----------
@@ -218,14 +220,14 @@ function patchCommon() {
     const f = path.join(cfg.mt5DataDir, 'config', 'common.ini');
     fs.mkdirSync(path.dirname(f), { recursive: true });
     const cur = fs.existsSync(f) ? fs.readFileSync(f) : Buffer.alloc(0);
-    fs.writeFileSync(f, patchSection(cur, 'Experts', { Enabled: 1, AllowLiveTrading: 1, WebRequest: 1, WebRequestUrl: eaUrl() }));
+    fs.writeFileSync(f, patchSection(cur, 'Experts', { Enabled: 1, AllowLiveTrading: 1, WebRequest: 1, WebRequestUrl: allowList() }));
   } catch (e) { log('Could not update MT5 settings:', e.message); }
 }
 
 function writeStartFiles() {
   const pw = getSecret();
   const ini = ['[Common]', `Login=${S.login}`, `Password=${pw}`, `Server=${S.server}`, 'NewsEnable=0',
-    '[Experts]', 'Enabled=1', 'AllowLiveTrading=1', 'AllowDllImport=0', 'Account=0', 'Profile=0', 'WebRequest=1', `WebRequestUrl=${eaUrl()}`,
+    '[Experts]', 'Enabled=1', 'AllowLiveTrading=1', 'AllowDllImport=0', 'Account=0', 'Profile=0', 'WebRequest=1', `WebRequestUrl=${allowList()}`,
     '[StartUp]', isCustom() ? `Expert=Imported\\${S.ea.name}` : 'Expert=KanairyEA',
     ...(isCustom() ? (S.ea.hasPreset ? [`ExpertParameters=${S.ea.name}.set`] : []) : ['ExpertParameters=kanairy.set']),
     `Symbol=${S.symbol}`, `Period=${S.tf}`, ''].join('\r\n');
@@ -259,7 +261,7 @@ async function launchMt5() {
   const cleanCharts = () => {
     try {
       const dir = path.join(cfg.mt5DataDir || '', 'Profiles', 'Charts', 'Default');
-      const drop = isCustom() ? /KanairyEA/i : /Imported\\/i;
+      const drop = isCustom() ? /KanairyEA/i : /KanairyEA|Imported\\/i; // always re-attach Kanairy fresh, so it uses this person's own address and key, not inputs saved on an old chart
       for (const f of fs.readdirSync(dir)) if (/\.chr$/i.test(f) && drop.test(readText(path.join(dir, f)))) { fs.unlinkSync(path.join(dir, f)); log('Cleared saved chart', f); }
     } catch { /* no saved charts */ }
   };
