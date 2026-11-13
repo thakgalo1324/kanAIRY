@@ -110,7 +110,7 @@ double NormLots(double l)
    return NormalizeDouble(l, 2);
 }
 
-void OpenOrder(const bool buy, const double lots, const double slDist, const double tpDist)
+void OpenOrder(const bool buy, const double lots, const double slDist, const double tpDist, const double tgDist = 0, const double trDist = 0)
 {
    double pt  = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
    double minD = (double)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) * pt + pt * 5;
@@ -120,8 +120,10 @@ void OpenOrder(const bool buy, const double lots, const double slDist, const dou
    if(px <= 0) return;
    double sl = NormalizeDouble(buy ? px - sd : px + sd, _Digits);
    double tp = td > 0 ? NormalizeDouble(buy ? px + td : px - td, _Digits) : 0;
-   bool ok = buy ? trade.Buy(NormLots(lots), _Symbol, px, sl, tp, "Kanairy")
-                 : trade.Sell(NormLots(lots), _Symbol, px, sl, tp, "Kanairy");
+   // Ratchet trades carry their target and step in the comment ("KT<target>,<step>"), so no state is lost on a restart.
+   string cm = (tgDist > 0 && trDist > 0) ? StringFormat("KT%.3f,%.3f", tgDist, trDist) : "Kanairy";
+   bool ok = buy ? trade.Buy(NormLots(lots), _Symbol, px, sl, tp, cm)
+                 : trade.Sell(NormLots(lots), _Symbol, px, sl, tp, cm);
    if(!ok)
    {
       string m = StringFormat("{\"k\":\"sys\",\"text\":\"%s failed: %s\"}", buy ? "BUY" : "SELL", trade.ResultRetcodeDescription());
@@ -152,10 +154,43 @@ void RunCommands(const string reply)
          g_status = "AutoTrading is OFF";
          continue;
       }
-      if(act == "buy")       OpenOrder(true,  JNum(o, "lots"), JNum(o, "sl"), JNum(o, "tp"));
-      else if(act == "sell") OpenOrder(false, JNum(o, "lots"), JNum(o, "sl"), JNum(o, "tp"));
+      if(act == "buy")       OpenOrder(true,  JNum(o, "lots"), JNum(o, "sl"), JNum(o, "tp"), JNum(o, "tg"), JNum(o, "tr"));
+      else if(act == "sell") OpenOrder(false, JNum(o, "lots"), JNum(o, "sl"), JNum(o, "tp"), JNum(o, "tg"), JNum(o, "tr"));
       else if(act == "close"){ ulong t = (ulong)JNum(o, "t"); if(Mine(t)) trade.PositionClose(t); }
       else if(act == "closeall") CloseAllMine();
+   }
+}
+
+
+//--- ratchet: once price passes the target, keep the trade open and raise the stop a step at a time ---
+void TrailPositions()
+{
+   double pt   = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+   double minD = (double)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) * pt + pt * 5;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong t = PositionGetTicket(i);
+      if(t == 0 || !Mine(t)) continue;
+      string cm = PositionGetString(POSITION_COMMENT);
+      if(StringSubstr(cm, 0, 2) != "KT") continue;
+      string parts[];
+      if(StringSplit(StringSubstr(cm, 2), ',', parts) != 2) continue;
+      double tg = StringToDouble(parts[0]), tr = StringToDouble(parts[1]);
+      if(tg <= 0 || tr <= 0) continue;
+      bool   buy   = PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY;
+      double entry = PositionGetDouble(POSITION_PRICE_OPEN);
+      double sl    = PositionGetDouble(POSITION_SL);
+      double px    = buy ? SymbolInfoDouble(_Symbol, SYMBOL_BID) : SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+      if(px <= 0) continue;
+      double m = buy ? px - entry : entry - px;     // how far the trade is in profit
+      if(m < tg) continue;                           // target not reached yet: normal stop applies
+      double steps = MathFloor((m - tg) / tr + 1e-9);
+      double lock  = tg - tr + steps * tr;           // profit to protect
+      double want  = buy ? entry + lock : entry - lock;
+      want = buy ? MathMin(want, px - minD) : MathMax(want, px + minD);
+      want = NormalizeDouble(want, _Digits);
+      bool better = buy ? (sl == 0 || want > sl + pt) : (sl == 0 || want < sl - pt);
+      if(better) trade.PositionModify(t, want, PositionGetDouble(POSITION_TP));
    }
 }
 
@@ -296,6 +331,7 @@ void OnDeinit(const int reason)
 
 void OnTimer()
 {
+   TrailPositions();
    Sync();
    Comment("KANAIRY  |  ", g_status, "\n", _Symbol, " ", PeriodText());
 }
@@ -307,5 +343,6 @@ void OnTick()
    ulong now = GetTickCount64();
    if(now - g_lastTickSync < 50) return;
    g_lastTickSync = now;
+   TrailPositions();
    Sync();
 }

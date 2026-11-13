@@ -162,7 +162,11 @@ function decide(sig, cmds) {
     n = Math.min(n, Math.floor((g('hub_max_total_lots') - openLots + 1e-9) / lots));
     if (n <= 0) { L.err = 'Total lot ceiling reached'; return; }
   }
-  for (let i = 0; i < n; i++) cmds.push({ a: buy ? 'buy' : 'sell', lots, sl: atr * slAtr, tp: tpAtr > 0 ? atr * tpAtr : 0 });
+  // Ratchet mode: the target no longer closes the trade. The EA lets it run, then raises the stop one step at a time (step = trail x stop distance).
+  const ratchet = sig.trail > 0 && tpAtr > 0;
+  for (let i = 0; i < n; i++) cmds.push(ratchet
+    ? { a: buy ? 'buy' : 'sell', lots, sl: atr * slAtr, tp: 0, tg: +(atr * tpAtr).toFixed(5), tr: +(atr * slAtr * sig.trail).toFixed(5) }
+    : { a: buy ? 'buy' : 'sell', lots, sl: atr * slAtr, tp: tpAtr > 0 ? atr * tpAtr : 0 });
   S.dayTrades += n; L.lastEntryMs = now;
   addFeed('signal', L.signal + ' signal x' + n + ' @ ' + lots + ' lots', buy ? 'buy' : 'sell', lots);
 }

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<strategy name="Gold Apex Runner">
+  <timeframe>M1</timeframe>
+  <lots>0.01</lots>
+  <stoploss atr="1.0" period="14"/>
+  <takeprofit atr="1.5" period="14"/>
+  <!-- Longer targets: only trade strong trends, buy the dip when momentum turns back up -->
+  <rule side="long" action="enter">
+    <compare a="ema:21" op="gt" b="ema:50"/>
+    <compare a="close" op="gt" b="ema:21"/>
+    <compare a="adx:14" op="gt" b="20"/>
+    <compare a="stoch:k:5:3:3" op="lt" b="50"/>
+    <cross a="stoch:k:5:3:3" b="stoch:d:5:3:3" dir="above"/>
+  </rule>
+  <rule side="short" action="enter">
+    <compare a="ema:21" op="lt" b="ema:50"/>
+    <compare a="close" op="lt" b="ema:21"/>
+    <compare a="adx:14" op="gt" b="20"/>
+    <compare a="stoch:k:5:3:3" op="gt" b="50"/>
+    <cross a="stoch:k:5:3:3" b="stoch:d:5:3:3" dir="below"/>
+  </rule>
+  <rule side="long" action="exit">
+    <cross a="ema:21" b="ema:50" dir="below"/>
+  </rule>
+  <rule side="short" action="exit">
+    <cross a="ema:21" b="ema:50" dir="above"/>
+  </rule>
+</strategy>

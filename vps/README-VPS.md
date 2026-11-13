@@ -58,3 +58,7 @@ In the app, Strategy tab, **Import an EA**. Pick a `.mq5` source (this server co
 - **Start and stop an imported EA from the phone:** with an imported `.mq5` or `.ex5`, hold the crown to start MT5 with it, tap to stop it. Stopping shuts down only that person's MT5.
 - The old single-account `server.js` still works if you run it directly, but the gateway is the normal way now. Close any old "Kanairy server" window before starting the gateway, because both use port 8766.
 - Everyone's EA talks to the server on its own private address (127.0.1.x, port 80), all with the same EA key.
+
+## Ratchet (trailing) trades
+
+Add `<trail step="0.2"/>` to a strategy. The take-profit is then a target, not an exit. When price passes it, the trade stays open and the stop moves up one step at a time (step = 0.2 x the stop distance, so one fifth). The stop only ever moves in your favour. Needs the updated KanairyEA (the server recompiles it when you press Launch MT5).

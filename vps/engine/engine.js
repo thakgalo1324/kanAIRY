@@ -10,7 +10,7 @@ window.__eval = (csJson, stratJson) => {
     const i = cs.length - 1;
     const sig = signalAt(s, cs, i);
     const atr = compute({ id: 'atr', params: { period: s.risk.atrPeriod || 14 } }, cs).series[0].values[i];
-    return JSON.stringify({ ...sig, atr: atr === atr ? atr : null, lots: s.risk.lots, slAtr: s.risk.slAtr || null, tpAtr: s.risk.tpAtr || null, name: s.name });
+    return JSON.stringify({ ...sig, atr: atr === atr ? atr : null, lots: s.risk.lots, slAtr: s.risk.slAtr || null, tpAtr: s.risk.tpAtr || null, trail: s.risk.trail || null, name: s.name });
   } catch (e) { return JSON.stringify({ error: String(e && e.message || e) }); }
 };
 window.__engineReady = true;

@@ -70,6 +70,7 @@ export function validate(s) {
   if (!(s.risk.lots > 0)) errs.push('Lots must be greater than zero.');
   if (s.risk.slAtr != null && s.risk.slAtr <= 0) errs.push('Stop loss multiple must be positive.');
   if (s.risk.tpAtr != null && s.risk.tpAtr <= 0) errs.push('Take profit multiple must be positive.');
+  if (s.risk.trail != null && !(s.risk.trail > 0 && s.risk.trail <= 1)) errs.push('Trail step must be between 0 and 1 (for example 0.2 is one fifth of the stop loss).');
   return errs;
 }
 
@@ -174,6 +175,7 @@ export function toXML(s) {
     `  <lots>${s.risk.lots}</lots>`];
   if (s.risk.slAtr) lines.push(`  <stoploss atr="${s.risk.slAtr}" period="${s.risk.atrPeriod || 14}"/>`);
   if (s.risk.tpAtr) lines.push(`  <takeprofit atr="${s.risk.tpAtr}" period="${s.risk.atrPeriod || 14}"/>`);
+  if (s.risk.trail) lines.push(`  <trail step="${s.risk.trail}"/>`);
   SIDES.forEach(([k, side, action]) => {
     if (!s.rules[k].length) return;
     lines.push(`  <rule side="${side}" action="${action}">`);
@@ -197,6 +199,7 @@ export function fromXML(text) {
   const sl = root.querySelector('stoploss'), tp = root.querySelector('takeprofit');
   if (sl) { s.risk.slAtr = parseFloat(sl.getAttribute('atr')) || null; s.risk.atrPeriod = parseInt(sl.getAttribute('period')) || 14; }
   if (tp) { s.risk.tpAtr = parseFloat(tp.getAttribute('atr')) || null; }
+  const tr = root.querySelector('trail'); if (tr) s.risk.trail = parseFloat(tr.getAttribute('step')) || null;
   root.querySelectorAll('rule').forEach(r => {
     const side = r.getAttribute('side'), action = r.getAttribute('action') || 'enter';
     const key = SIDES.find(x => x[1] === side && x[2] === action)?.[0];
