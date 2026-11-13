@@ -1,0 +1,8 @@
+# Kanairy keys. Optional.
+# Leave a line empty to keep the key you already have. Save this file, then restart Kanairy (close its window and double-click start-kanairy).
+# Use letters and numbers only, no spaces.
+#
+# eaKey  = the key every EA uses to talk to the server (6 to 64 characters).
+# appKey = the one key you type into the phone app (8 to 64 characters). Changing it means typing the new one in the app again.
+eaKey=
+appKey=

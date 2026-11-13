@@ -56,6 +56,18 @@ for (const [k, v] of Object.entries({ maxUsers: 10, workerBase: 9100, eaPort: 80
 if (!gw.mt5Source || !fs.existsSync(path.join(gw.mt5Source, 'terminal64.exe'))) { const f = findMt5Dir(); if (f) { gw.mt5Source = f; changed = true; } }
 if (changed) writeJson(GW_FILE, gw);
 
+// Optional keys file next to this program (kanairy-keys.txt). Fill in a line to choose your own key; leave it empty to keep the current one.
+try {
+  const kf = path.join(DIR, 'kanairy-keys.txt');
+  if (fs.existsSync(kf)) {
+    const t = Object.fromEntries(fs.readFileSync(kf, 'utf8').split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#') && l.includes('=')).map(l => [l.slice(0, l.indexOf('=')).trim().toLowerCase(), l.slice(l.indexOf('=') + 1).trim()]));
+    let c = false;
+    if (t.eakey && /^[\x21-\x7e]{6,64}$/.test(t.eakey) && t.eakey !== gw.eaToken) { gw.eaToken = t.eakey; c = true; log('EA key set from kanairy-keys.txt'); }
+    if (t.appkey && /^[\x21-\x7e]{8,64}$/.test(t.appkey) && t.appkey !== gw.appKey) { gw.appKey = t.appkey; c = true; log('App key set from kanairy-keys.txt'); }
+    if (c) writeJson(GW_FILE, gw);
+  }
+} catch (e) { log('Could not read kanairy-keys.txt: ' + e.message); }
+
 let users = readJson(USERS_FILE) || {};
 const saveUsers = () => writeJson(USERS_FILE, users);
 
