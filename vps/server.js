@@ -1,6 +1,7 @@
 // Kanairy server. Runs on your VPS next to MT5.
 //   EA  <--(127.0.0.1:eaPort, token)-->  this server  <--(appPort, signed requests)-->  Kanairy phone app
 // No dependencies. Needs Node 18 or newer.
+import { createWa } from './whatsapp.js';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -461,6 +462,7 @@ async function showAddress() {
   console.log(`\n  Also open TCP port ${cfg.appPort} in your VPS provider's firewall (security group).\n`);
 }
 
+const WA = createWa({ dir: DATA, log });
 const send = (res, code, obj) => { const b = JSON.stringify(obj); res.writeHead(code, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(b) }); res.end(b); };
 function readBody(req, max = 3e6) {
   return new Promise((ok, no) => { let n = 0; const ch = []; req.on('data', c => { n += c.length; if (n > max) { no(new Error('too large')); req.destroy(); } else ch.push(c); }); req.on('end', () => ok(Buffer.concat(ch).toString('utf8'))); req.on('error', no); });
@@ -487,6 +489,8 @@ const appServer = http.createServer(async (req, res) => {
     const u = req.url;
     if (u === '/api/status') return send(res, 200, status());
     if (u === '/api/feed') return send(res, 200, S.feed);
+    if (u === '/api/wa/status') return send(res, 200, WA.status());
+    if (u === '/api/wa/inbox') return send(res, 200, WA.inbox());
     if (u === '/api/strategy' && req.method === 'GET') return send(res, 200, { strategy: S.strategy, rev: S.rev });
     if (u === '/api/strategy') { S.strategy = j.strategy || null; S.rev++; if (S.strategy && S.strategy.timeframe) S.tf = S.strategy.timeframe; L.lastBarT = 0; save(); addFeed('sys', S.strategy ? 'Strategy loaded: ' + S.strategy.name : 'Strategy cleared'); return send(res, 200, { ok: true, rev: S.rev }); }
     if (u === '/api/cfg') { if (!GUARD_KEYS.includes(j.key) || !(Number(j.value) >= 0)) return send(res, 400, { error: 'bad value' }); S.guards[j.key] = Number(j.value); save(); return send(res, 200, { ok: true }); }
@@ -500,6 +504,9 @@ const appServer = http.createServer(async (req, res) => {
     if (u === '/api/ea/import') return send(res, 200, j.ex5 ? await importEx5(j.name, j.ex5) : await importEa(j.name, j.source));
     if (u === '/api/ea/preset') return send(res, 200, importPreset(j.text));
     if (u === '/api/ea/mode') return send(res, 200, setEaMode(j.mode, j.tf));
+    if (u === '/api/wa/link') return send(res, 200, await WA.link(j.phone));
+    if (u === '/api/wa/follow') return send(res, 200, await WA.follow(j.channel));
+    if (u === '/api/wa/unlink') return send(res, 200, await WA.unlink());
     if (u === '/api/login') {
       S.login = String(j.login || '').trim(); S.server = String(j.server || '').trim();
       S.symbol = String(j.symbol || S.symbol || 'XAUUSD').toUpperCase().replace(/[^A-Z0-9._]/g, '');
@@ -540,6 +547,7 @@ if (cfg.eaHost === '127.0.1.1') {
   alt.listen(cfg.eaPort, '127.0.0.1', () => log('EA bridge also on 127.0.0.1:' + cfg.eaPort));
 }
 autoSetup();
+WA.resume();
 if (!cfg.quiet) showAddress();
 
 // ---------- keep MT5 and the EA alive ----------

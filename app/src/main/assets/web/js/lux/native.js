@@ -160,6 +160,12 @@ export const B = {
     if (!j.ok) return j;
     return B.signIn(name, pin);
   },
+  // ---- WhatsApp channel link (pairing code, no QR) ----
+  async waStatus() { if (!N) return { state: 'off', count: 0 }; const r = await req('GET', '/api/wa/status'); return r.status === 200 ? parse(r.text, { state: 'off' }) : { state: 'off', error: 'Server not reachable' }; },
+  async waInbox() { if (!N) return []; const r = await req('GET', '/api/wa/inbox'); return r.status === 200 ? parse(r.text, []) : []; },
+  async waLink(phone) { if (!N) return { ok: false, error: 'Preview only' }; const r = await req('POST', '/api/wa/link', { phone }); return parse(r.text, { ok: false, error: 'No answer from the server' }); },
+  async waFollow(channel) { if (!N) return { ok: false, error: 'Preview only' }; const r = await req('POST', '/api/wa/follow', { channel }); return parse(r.text, { ok: false, error: 'No answer from the server' }); },
+  async waUnlink() { if (!N) return { ok: true }; const r = await req('POST', '/api/wa/unlink', {}); return parse(r.text, { ok: false }); },
   signOut() { if (N) { N.clearUser(T); C.status = {}; C.stratRev = -1; poll(); } },
   async deleteAccount() {
     if (!N) return { ok: true };

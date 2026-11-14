@@ -62,3 +62,7 @@ In the app, Strategy tab, **Import an EA**. Pick a `.mq5` source (this server co
 ## Ratchet (trailing) trades
 
 Add `<trail step="0.2"/>` to a strategy. The take-profit is then a target, not an exit. When price passes it, the trade stays open and the stop moves up one step at a time (step = 0.2 x the stop distance, so one fifth). The stop only ever moves in your favour. Needs the updated KanairyEA (the server recompiles it when you press Launch MT5).
+
+## WhatsApp channel (optional, unofficial)
+
+Run `install-whatsapp.bat` once (needs internet), then restart Kanairy. In the app, Setup has a WhatsApp card: enter a spare number, get a pairing code, and enter it in WhatsApp under Linked devices. Paste the channel link and tap Follow. Posts are collected in the server's inbox. WhatsApp can log out or ban a linked number, so use a spare one.
