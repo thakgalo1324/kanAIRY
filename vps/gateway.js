@@ -84,7 +84,7 @@ function writeWorkerCfg(name, u) {
   fs.mkdirSync(dir, { recursive: true });
   const f = path.join(dir, 'config.json'), cur = readJson(f) || {};
   writeJson(f, { ...cur, appKey: u.workerKey, eaToken: gw.eaToken, appPort: workerPort(u), appHost: '127.0.0.1', eaPort: gw.eaPort, eaHost: eaHost(u),
-    mt5Path: path.join(mt5Dir(name), 'terminal64.exe'), mt5DataDir: mt5Dir(name), portable: true, allowLive: !!gw.allowLive, autoLaunch: true, quiet: true });
+    mt5Source: gw.mt5Source, mt5Path: path.join(mt5Dir(name), 'terminal64.exe'), mt5DataDir: mt5Dir(name), portable: true, allowLive: !!gw.allowLive, autoLaunch: true, quiet: true });
 }
 
 // Private MT5 copy for this person (program files only, no accounts, no charts).

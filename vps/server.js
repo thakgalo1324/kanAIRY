@@ -320,6 +320,21 @@ function findDataDir(exe) {
   }
   return fallback;
 }
+// MetaEditor for a private (portable) MT5 must run in portable mode and needs MQL5\\Include (Trade.mqh). A fresh copy has neither yet, so borrow the Include folder from the original MT5.
+function meArgs(dst, logf) { return [...(cfg.portable ? ['/portable'] : []), '/compile:' + dst, '/log:' + logf]; }
+function ensureIncludes() {
+  try {
+    if (!cfg.portable || !cfg.mt5DataDir) return;
+    const mine = path.join(cfg.mt5DataDir, 'MQL5', 'Include');
+    if (fs.existsSync(path.join(mine, 'Trade', 'Trade.mqh'))) return;
+    const srcExe = cfg.mt5Source ? path.join(cfg.mt5Source, 'terminal64.exe') : '';
+    const from = srcExe && fs.existsSync(srcExe) ? findDataDir(srcExe) : '';
+    const inc = from ? path.join(from, 'MQL5', 'Include') : '';
+    if (inc && fs.existsSync(inc)) { fs.cpSync(inc, mine, { recursive: true }); log('Copied the MQL5 Include folder for the EA build.'); }
+    else log('MQL5 Include folder not found. Open the original MetaTrader 5 once, then press Launch MT5 again.');
+  } catch (e) { log('Include copy problem:', e.message); }
+}
+const compileErrors = f => { try { return readText(f).split(/\r?\n/).filter(l => /error/i.test(l) && !/Result:/i.test(l)).slice(0, 3).join(' | '); } catch { return ''; } };
 let compiling = null;
 function autoSetup() {
   if (compiling) return compiling;
@@ -345,9 +360,11 @@ function autoSetup() {
       const me = path.join(path.dirname(exe), 'MetaEditor64.exe');
       if (!fs.existsSync(me)) { log('MetaEditor not found. Open MT5, press F4, open KanairyEA and press F7 to compile it.'); return done(); }
       const t0 = Date.now() - 2000;
-      compiling = new Promise(r => execFile(me, ['/compile:' + dst, '/log:' + path.join(DATA, 'compile.log')], () => {
+      ensureIncludes();
+      const clog = path.join(DATA, 'compile.log');
+      compiling = new Promise(r => execFile(me, meArgs(dst, clog), () => {
         const okNow = fs.existsSync(ex5) && fs.statSync(ex5).mtimeMs >= t0;
-        log(okNow ? 'EA installed and compiled.' : 'EA compile failed. See data\\compile.log');
+        log(okNow ? 'EA installed and compiled.' : 'EA compile failed. ' + (compileErrors(clog) || 'See data\\compile.log'));
         compiling = null; r(); done();
       }));
     } catch (e) { log('Auto setup problem:', e.message); done(); }
@@ -379,7 +396,8 @@ async function importEa(name, source) {
   if (S.ea.name !== nm) S.ea.hasPreset = false;
   S.ea.name = nm; S.ea.state = 'compiling'; S.ea.log = ''; save();
   addFeed('sys', `Compiling imported EA ${nm}`);
-  execFile(me, ['/compile:' + dst, '/log:' + logf], { timeout: 120000 }, () => {
+  ensureIncludes();
+  execFile(me, meArgs(dst, logf), { timeout: 120000 }, () => {
     const out = readText(logf), m = /Result:\s*(\d+)\s*errors?,\s*(\d+)\s*warnings?/i.exec(out);
     const errors = m ? +m[1] : (fs.existsSync(ex5) ? 0 : 1);
     if (fs.existsSync(ex5) && errors === 0) {
