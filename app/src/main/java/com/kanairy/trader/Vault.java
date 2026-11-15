@@ -17,16 +17,26 @@ final class Vault {
     private static final String ALIAS = "kanairy_vault";
     private static final String PROVIDER = "AndroidKeyStore";
 
-    private static SecretKey key() throws Exception {
-        KeyStore ks = KeyStore.getInstance(PROVIDER);
-        ks.load(null);
-        if (ks.containsAlias(ALIAS)) return (SecretKey) ks.getKey(ALIAS, null);
+    private static SecretKey create() throws Exception {
         KeyGenerator g = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, PROVIDER);
         g.init(new KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256).build());
         return g.generateKey();
+    }
+
+    private static SecretKey key() throws Exception {
+        KeyStore ks = KeyStore.getInstance(PROVIDER);
+        ks.load(null);
+        if (ks.containsAlias(ALIAS)) {
+            try {
+                SecretKey k = (SecretKey) ks.getKey(ALIAS, null);
+                if (k != null) return k;
+            } catch (Exception e) { Flog.i("vault key unusable, making a new one: " + e.getMessage()); }
+            try { ks.deleteEntry(ALIAS); } catch (Exception ignored) { }
+        }
+        return create();
     }
 
     static void put(Context c, String name, String plain) {
@@ -51,5 +61,6 @@ final class Vault {
         } catch (Exception e) { return ""; }
     }
 
-    static boolean has(Context c, String name) { return !Cfg.s(c, "vault_" + name, "").isEmpty(); }
+    /** True only when the saved value can really be decrypted. A value left over from an old key counts as missing, so the app asks again instead of staying stuck. */
+    static boolean has(Context c, String name) { return !get(c, name).isEmpty(); }
 }

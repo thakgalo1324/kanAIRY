@@ -56,6 +56,17 @@ account = mountAccount($('s-account'), () => live.tick());
 setup = mountSetup($('s-setup'), applyTheme, theme);
 
 window.__go = go;
+// A post shared from WhatsApp (Share, then Kanairy): open Setup and send it to the signal reader.
+window.__shared = async () => {
+  const t = B.takeShared();
+  if (!t) return;
+  go('setup');
+  for (let i = 0; i < 10 && B.link() !== 'ok'; i++) await new Promise(r => setTimeout(r, 1000));
+  const r = await B.sendSignal(t);
+  toast(r.ok ? 'Signal added' : (r.error || 'That post is not a clear signal'));
+  if (window.__refreshSignals) window.__refreshSignals();
+};
+setTimeout(() => window.__shared(), 600);
 window.__back = () => { if (cur !== 'live') { go('live'); return true; } return false; };
 const start = location.hash.slice(1);
 go(TABS.some(t => t[0] === start) ? start : 'live');

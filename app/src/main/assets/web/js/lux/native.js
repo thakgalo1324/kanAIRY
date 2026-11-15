@@ -160,12 +160,12 @@ export const B = {
     if (!j.ok) return j;
     return B.signIn(name, pin);
   },
-  // ---- WhatsApp channel link (pairing code, no QR) ----
-  async waStatus() { if (!N) return { state: 'off', count: 0 }; const r = await req('GET', '/api/wa/status'); return r.status === 200 ? parse(r.text, { state: 'off' }) : { state: 'off', error: 'Server not reachable' }; },
-  async waInbox() { if (!N) return []; const r = await req('GET', '/api/wa/inbox'); return r.status === 200 ? parse(r.text, []) : []; },
-  async waLink(phone) { if (!N) return { ok: false, error: 'Preview only' }; const r = await req('POST', '/api/wa/link', { phone }); return parse(r.text, { ok: false, error: 'No answer from the server' }); },
-  async waFollow(channel) { if (!N) return { ok: false, error: 'Preview only' }; const r = await req('POST', '/api/wa/follow', { channel }); return parse(r.text, { ok: false, error: 'No answer from the server' }); },
-  async waUnlink() { if (!N) return { ok: true }; const r = await req('POST', '/api/wa/unlink', {}); return parse(r.text, { ok: false }); },
+  // ---- trade signals: paste a post, approve it, the server places the orders ----
+  async signals() { if (!N) return { mode: 'ask', lots: 0.01, both: false, list: [] }; const r = await req('GET', '/api/signals'); return r.status === 200 ? parse(r.text, { list: [] }) : { mode: 'ask', lots: 0.01, list: [], offline: true }; },
+  async sendSignal(text) { if (!linkOk()) return { ok: false, error: LINK_TEXT[C.link] }; if (!N) return { ok: false, error: 'Preview only' }; const r = await req('POST', '/api/signal', { text }); return parse(r.text, { ok: false, error: 'No answer from the server' }); },
+  async signalMode(o) { if (!linkOk() || !N) return { ok: false }; const r = await req('POST', '/api/signal/mode', o); return parse(r.text, { ok: false }); },
+  async signalAct(id, what) { if (!linkOk() || !N) return { ok: false }; const r = await req('POST', '/api/signal/act', { id, do: what }); return parse(r.text, { ok: false }); },
+  takeShared: () => (N && N.takeShared ? N.takeShared(T) : ''),
   signOut() { if (N) { N.clearUser(T); C.status = {}; C.stratRev = -1; poll(); } },
   async deleteAccount() {
     if (!N) return { ok: true };

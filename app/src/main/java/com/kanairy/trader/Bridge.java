@@ -188,12 +188,23 @@ final class Bridge {
         Vault.put(act, "userkey", "");
     }
 
+    /** Text shared to Kanairy from another app (Share, then Kanairy). Handed over once. */
+    static volatile String pendingShare = "";
+
+    @JavascriptInterface
+    public String takeShared(String t) {
+        if (!ok(t)) return "";
+        String v = pendingShare;
+        pendingShare = "";
+        return v == null ? "" : v;
+    }
+
     @JavascriptInterface
     public String vpsInfo(String t) {
         if (!ok(t)) return "{}";
         try {
             return new JSONObject().put("url", Cfg.s(act, "vps_url", "")).put("hasKey", Vault.has(act, "vpskey"))
-                .put("user", Cfg.s(act, "vps_user", "")).toString();
+                .put("user", Vault.has(act, "userkey") ? Cfg.s(act, "vps_user", "") : "").toString();
         } catch (Exception e) { return "{}"; }
     }
 
@@ -207,7 +218,7 @@ final class Bridge {
             try {
                 String base = Cfg.s(act, "vps_url", "");
                 String key = Vault.get(act, "vpskey");
-                String user = Cfg.s(act, "vps_user", "");
+                String user = Vault.has(act, "userkey") ? Cfg.s(act, "vps_user", "") : "";
                 // Creating an account and the first hello use the shared key. Everything else is signed with this person's own key.
                 boolean shared = path.startsWith("/api/hello") || path.startsWith("/api/register");
                 if (!shared && !user.isEmpty()) key = Vault.get(act, "userkey");

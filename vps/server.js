@@ -1,7 +1,7 @@
 // Kanairy server. Runs on your VPS next to MT5.
 //   EA  <--(127.0.0.1:eaPort, token)-->  this server  <--(appPort, signed requests)-->  Kanairy phone app
 // No dependencies. Needs Node 18 or newer.
-import { createWa } from './whatsapp.js';
+import { parseSignal, planOrders } from './signals.js';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -55,6 +55,7 @@ const GUARD_DEFAULTS = { hub_lot: 0, hub_max_open: 3, hub_burst: 1, hub_cooldown
 const EA_DEFAULT = { mode: 'kanairy', name: '', state: 'none', log: '', hasPreset: false };
 let S = { guards: { ...GUARD_DEFAULTS }, strategy: null, rev: 0, feed: [], login: '', server: '', symbol: 'XAUUSD', tf: 'M1', hasPw: false, day: 0, dayTrades: 0, wins: 0, losses: 0, dayPnl: 0, ea: { ...EA_DEFAULT } };
 try { S = { ...S, ...JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) }; S.guards = { ...GUARD_DEFAULTS, ...S.guards }; S.ea = { ...EA_DEFAULT, ...S.ea }; } catch { /* first run */ }
+S.sig = { mode: 'ask', lots: 0.01, both: false, list: [], ...(S.sig || {}) };
 if (S.ea.state === 'compiling') { S.ea.state = 'failed'; S.ea.log = 'Compile was interrupted. Import the file again.'; } // server restarted mid-compile
 const isCustom = () => S.ea.mode === 'custom' && S.ea.state === 'ok' && !!S.ea.name;
 let saveT = null;
@@ -114,6 +115,7 @@ function sync(r) {
   const out = { cmds: [], run: L.running };
   if (L.killPending) { out.cmds.push({ a: 'closeall' }); L.killPending = false; return out; }
   if (!L.running) return out;
+  runSignals(out.cmds);
   if (L.lastBarT === 0) out.want = true; // ask the EA for candles now
   const bars = r.bars, barT = +r.barT || 0;
   if (!Array.isArray(bars) || bars.length < 30) return out;
@@ -125,7 +127,7 @@ function sync(r) {
   try { sig = evalStrategy(candles, S.strategy); } catch (e) { L.err = 'Engine error: ' + e.message; return out; }
   if (sig.error) { L.err = sig.error; return out; }
   L.err = '';
-  decide(sig, out.cmds);
+  if (S.sig.mode === 'off' || S.sig.both) decide(sig, out.cmds); // while Signals is on, the strategy stays quiet unless you chose both
   return out;
 }
 
@@ -462,7 +464,43 @@ async function showAddress() {
   console.log(`\n  Also open TCP port ${cfg.appPort} in your VPS provider's firewall (security group).\n`);
 }
 
-const WA = createWa({ dir: DATA, log });
+// ---------- trade signals (pasted in the app, or collected from a channel) ----------
+const pubSig = e => ({ id: e.id, t: e.t, from: e.from, status: e.status, note: e.note || '', sig: e.sig });
+function ingestSignal(text, from = 'paste') {
+  if (S.sig.mode === 'off') return { ok: false, error: 'Signals are switched off. Choose Ask first or Auto in the app.' };
+  const t = String(text || '').trim(), key = crypto.createHash('sha1').update(t).digest('hex');
+  if (S.sig.list.some(x => x.key === key && Date.now() - x.t < 6 * 3600e3)) return { ok: false, error: 'You already have this signal.' };
+  const sig = parseSignal(t);
+  if (!sig.ok) return { ok: false, error: sig.reason };
+  const auto = S.sig.mode === 'auto';
+  const e = { id: crypto.randomBytes(4).toString('hex'), t: Date.now(), key, from, text: t.slice(0, 500), sig, status: auto ? 'queued' : 'pending', note: '', until: auto ? Date.now() + 10 * 60000 : 0 };
+  S.sig.list.unshift(e); S.sig.list = S.sig.list.slice(0, 40); save();
+  addFeed('signal', `Signal: ${sig.side.toUpperCase()} ${sig.lo}${sig.hi !== sig.lo ? '-' + sig.hi : ''}, SL ${sig.sl}, TP ${sig.tps.join('/')}` + (auto ? '' : ' (waiting for you)'));
+  return { ok: true, entry: pubSig(e) };
+}
+// Runs on every EA sync while the bot is started. Applies the same guard rails as the strategy, then sends market orders (one per take profit).
+function runSignals(cmds) {
+  const now = Date.now();
+  for (const e of S.sig.list) {
+    if (e.status === 'pending' && now - e.t > 30 * 60000) { e.status = 'skipped'; e.note = 'Expired before you answered'; save(); continue; }
+    if (e.status !== 'queued') continue;
+    const skip = why => { e.status = 'skipped'; e.note = why; save(); };
+    if (now > e.until) { skip(e.note || 'Price did not reach the entry zone in time'); continue; }
+    if (!String(S.symbol || '').toUpperCase().startsWith('XAU')) { skip('This signal is for gold but the app trades ' + S.symbol); continue; }
+    if (g('hub_daily_loss') > 0 && S.dayPnl <= -g('hub_daily_loss')) { skip('Daily loss limit reached'); continue; }
+    if (g('hub_max_spread') > 0 && L.spread > g('hub_max_spread')) { e.note = 'Spread too wide, waiting'; continue; }
+    if (!L.hedge && L.pos.some(p => p[1] === (e.sig.side === 'buy' ? 1 : 0))) { skip('An opposite trade is open and hedging is off'); continue; }
+    const room = Math.min(g('hub_max_open') - L.pos.length, g('hub_max_day') - S.dayTrades);
+    if (room <= 0) { e.note = 'Open-trade limit reached, waiting'; continue; }
+    const p = planOrders(e.sig, { bid: L.bid, ask: L.ask }, { maxOrders: room });
+    if (!p.ok) { e.note = p.reason; if (!p.wait) skip(p.reason); continue; }
+    const lots = g('hub_lot') > 0 ? g('hub_lot') : (S.sig.lots || 0.01);
+    for (const o of p.orders) cmds.push({ a: e.sig.side, lots, sl: o.sl, tp: o.tp });
+    e.status = 'done'; e.note = `Sent ${p.orders.length} order${p.orders.length > 1 ? 's' : ''} at ${e.sig.side === 'buy' ? L.ask : L.bid}`;
+    S.dayTrades += p.orders.length; L.lastEntryMs = now; save();
+    addFeed('signal', `${e.sig.side.toUpperCase()} signal x${p.orders.length} @ ${lots} lots`, e.sig.side, lots);
+  }
+}
 const send = (res, code, obj) => { const b = JSON.stringify(obj); res.writeHead(code, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(b) }); res.end(b); };
 function readBody(req, max = 3e6) {
   return new Promise((ok, no) => { let n = 0; const ch = []; req.on('data', c => { n += c.length; if (n > max) { no(new Error('too large')); req.destroy(); } else ch.push(c); }); req.on('end', () => ok(Buffer.concat(ch).toString('utf8'))); req.on('error', no); });
@@ -489,8 +527,7 @@ const appServer = http.createServer(async (req, res) => {
     const u = req.url;
     if (u === '/api/status') return send(res, 200, status());
     if (u === '/api/feed') return send(res, 200, S.feed);
-    if (u === '/api/wa/status') return send(res, 200, WA.status());
-    if (u === '/api/wa/inbox') return send(res, 200, WA.inbox());
+    if (u === '/api/signals') return send(res, 200, { mode: S.sig.mode, lots: S.sig.lots, both: !!S.sig.both, list: S.sig.list.slice(0, 15).map(pubSig) });
     if (u === '/api/strategy' && req.method === 'GET') return send(res, 200, { strategy: S.strategy, rev: S.rev });
     if (u === '/api/strategy') { S.strategy = j.strategy || null; S.rev++; if (S.strategy && S.strategy.timeframe) S.tf = S.strategy.timeframe; L.lastBarT = 0; save(); addFeed('sys', S.strategy ? 'Strategy loaded: ' + S.strategy.name : 'Strategy cleared'); return send(res, 200, { ok: true, rev: S.rev }); }
     if (u === '/api/cfg') { if (!GUARD_KEYS.includes(j.key) || !(Number(j.value) >= 0)) return send(res, 400, { error: 'bad value' }); S.guards[j.key] = Number(j.value); save(); return send(res, 200, { ok: true }); }
@@ -504,9 +541,20 @@ const appServer = http.createServer(async (req, res) => {
     if (u === '/api/ea/import') return send(res, 200, j.ex5 ? await importEx5(j.name, j.ex5) : await importEa(j.name, j.source));
     if (u === '/api/ea/preset') return send(res, 200, importPreset(j.text));
     if (u === '/api/ea/mode') return send(res, 200, setEaMode(j.mode, j.tf));
-    if (u === '/api/wa/link') return send(res, 200, await WA.link(j.phone));
-    if (u === '/api/wa/follow') return send(res, 200, await WA.follow(j.channel));
-    if (u === '/api/wa/unlink') return send(res, 200, await WA.unlink());
+    if (u === '/api/signal') return send(res, 200, ingestSignal(j.text, 'paste'));
+    if (u === '/api/signal/mode') {
+      if (['off', 'ask', 'auto'].includes(j.mode)) S.sig.mode = j.mode;
+      if (j.lots !== undefined) S.sig.lots = Math.max(0.01, Math.min(1, +j.lots || 0.01));
+      if (j.both !== undefined) S.sig.both = !!j.both;
+      save(); return send(res, 200, { ok: true, mode: S.sig.mode, lots: S.sig.lots, both: S.sig.both });
+    }
+    if (u === '/api/signal/act') {
+      const e = S.sig.list.find(x => x.id === j.id);
+      if (!e) return send(res, 200, { ok: false, error: 'Signal not found' });
+      if (e.status === 'pending' && j.do === 'approve') { e.status = 'queued'; e.until = Date.now() + 10 * 60000; e.note = L.running ? '' : 'Start the bot so it can place the trades'; }
+      else if (['pending', 'queued'].includes(e.status) && j.do === 'skip') { e.status = 'skipped'; e.note = 'Skipped by you'; }
+      save(); return send(res, 200, { ok: true });
+    }
     if (u === '/api/login') {
       S.login = String(j.login || '').trim(); S.server = String(j.server || '').trim();
       S.symbol = String(j.symbol || S.symbol || 'XAUUSD').toUpperCase().replace(/[^A-Z0-9._]/g, '');
@@ -547,7 +595,6 @@ if (cfg.eaHost === '127.0.1.1') {
   alt.listen(cfg.eaPort, '127.0.0.1', () => log('EA bridge also on 127.0.0.1:' + cfg.eaPort));
 }
 autoSetup();
-WA.resume();
 if (!cfg.quiet) showAddress();
 
 // ---------- keep MT5 and the EA alive ----------

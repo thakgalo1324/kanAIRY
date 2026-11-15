@@ -22,6 +22,24 @@ public class MainActivity extends Activity {
     private WebView web;
     private ValueCallback<Uri[]> chooser;
 
+    /** A post shared from WhatsApp (Share, then Kanairy) is parked for the page to pick up. */
+    private void takeShare(Intent in) {
+        try {
+            if (in != null && Intent.ACTION_SEND.equals(in.getAction()) && in.getType() != null && in.getType().startsWith("text/")) {
+                String t = in.getStringExtra(Intent.EXTRA_TEXT);
+                if (t != null && !t.trim().isEmpty()) Bridge.pendingShare = t.length() > 4000 ? t.substring(0, 4000) : t;
+            }
+        } catch (Exception ignored) { }
+    }
+
+    @Override
+    protected void onNewIntent(Intent in) {
+        super.onNewIntent(in);
+        setIntent(in);
+        takeShare(in);
+        if (web != null) web.evaluateJavascript("window.__shared&&window.__shared()", null);
+    }
+
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -75,6 +93,7 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
+        takeShare(getIntent());
         web.loadUrl("https://" + HOST + "/assets/web/index.html");
     }
 
