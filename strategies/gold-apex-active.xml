@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<strategy name="Gold Apex Active">
+  <timeframe>M1</timeframe>
+  <lots>0.01</lots>
+  <stoploss atr="1.0" period="14"/>
+  <takeprofit atr="0.7" period="14"/>
+  <trail step="0.2"/>
+  <!-- Loose Apex: buy whenever the fast trend is up and momentum turns up (no ADX, no EMA50, no Stochastic level limit) -->
+  <rule side="long" action="enter">
+    <compare a="ema:9" op="gt" b="ema:21"/>
+    <cross a="stoch:k:5:3:3" b="stoch:d:5:3:3" dir="above"/>
+  </rule>
+  <rule side="short" action="enter">
+    <compare a="ema:9" op="lt" b="ema:21"/>
+    <cross a="stoch:k:5:3:3" b="stoch:d:5:3:3" dir="below"/>
+  </rule>
+  <rule side="long" action="exit">
+    <cross a="ema:9" b="ema:21" dir="below"/>
+  </rule>
+  <rule side="short" action="exit">
+    <cross a="ema:9" b="ema:21" dir="above"/>
+  </rule>
+</strategy>

@@ -65,4 +65,4 @@ Add `<trail step="0.2"/>` to a strategy. The take-profit is then a target, not a
 
 ## Trade signals (paste a post, the server places the orders)
 
-In the app, Setup has a Signals card. Paste a post such as `GOLD BUY 3927 3928 / TP 3935 / TP 3945 / TP 3960 / SL 3920`. The server reads the entry zone, stop loss and take profits and sends one market order per take profit (up to your open-trade limit), only while the bot is started and price is inside the entry zone. Posts without a stop loss are rejected. Modes: Off, Ask first (you tap Execute), Auto. While Signals is on, your XML strategy stays quiet. In the app you can also press Share on a post in WhatsApp and pick Kanairy.
+In the app, Setup has a Signals card. Paste a post such as `GOLD BUY 3927 3928 / TP 3935 / TP 3945 / TP 3960 / SL 3920`. The server reads the entry zone, stop loss and take profits and sends one market order per take profit (up to your open-trade limit), only while the bot is started and price is inside the entry zone. Posts without a stop loss are rejected. Modes: Off, Ask first (you tap Execute), Auto. In the app you can also press Share on a post in WhatsApp and pick Kanairy.

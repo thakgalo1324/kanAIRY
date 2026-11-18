@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<strategy name="Test Random Trade (demo only)">
+  <timeframe>M1</timeframe>
+  <lots>0.01</lots>
+  <stoploss atr="1.0" period="14"/>
+  <takeprofit atr="0.7" period="14"/>
+  <!-- Takes a trade on the very next candle: buys if the candle closed above its 3-EMA, sells if below. No other filters. -->
+  <rule side="long" action="enter">
+    <compare a="close" op="gt" b="ema:3"/>
+  </rule>
+  <rule side="short" action="enter">
+    <compare a="close" op="lt" b="ema:3"/>
+  </rule>
+</strategy>

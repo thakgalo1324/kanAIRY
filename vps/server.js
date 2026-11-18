@@ -55,14 +55,14 @@ const GUARD_DEFAULTS = { hub_lot: 0, hub_max_open: 3, hub_burst: 1, hub_cooldown
 const EA_DEFAULT = { mode: 'kanairy', name: '', state: 'none', log: '', hasPreset: false };
 let S = { guards: { ...GUARD_DEFAULTS }, strategy: null, rev: 0, feed: [], login: '', server: '', symbol: 'XAUUSD', tf: 'M1', hasPw: false, day: 0, dayTrades: 0, wins: 0, losses: 0, dayPnl: 0, ea: { ...EA_DEFAULT } };
 try { S = { ...S, ...JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) }; S.guards = { ...GUARD_DEFAULTS, ...S.guards }; S.ea = { ...EA_DEFAULT, ...S.ea }; } catch { /* first run */ }
-S.sig = { mode: 'ask', lots: 0.01, both: false, list: [], ...(S.sig || {}) };
+S.sig = { mode: 'off', lots: 0.01, both: false, list: [], ...(S.sig || {}) };
 if (S.ea.state === 'compiling') { S.ea.state = 'failed'; S.ea.log = 'Compile was interrupted. Import the file again.'; } // server restarted mid-compile
 const isCustom = () => S.ea.mode === 'custom' && S.ea.state === 'ok' && !!S.ea.name;
 let saveT = null;
 const save = () => { clearTimeout(saveT); saveT = setTimeout(() => fs.writeFile(STATE_FILE, JSON.stringify(S), () => {}), 400); };
 
 // live (not persisted)
-const L = { running: false, killPending: false, lastSync: 0, sym: '', tf: '', bid: 0, ask: 0, bal: 0, eq: 0, spread: 0, hedge: true, pos: [], signal: 'WAIT', err: '', lastBarT: 0, lastEntryMs: 0, launchedAt: 0, relaunches: 0, eaSeen: 0, badToken: 0, mt5Up: false, wasConn: false, owner: null };
+const L = { running: false, killPending: false, lastSync: 0, sym: '', tf: '', bid: 0, ask: 0, bal: 0, eq: 0, spread: 0, hedge: true, pos: [], signal: 'WAIT', err: '', lastBarT: 0, at: true, evalAt: 0, lastEntryMs: 0, launchedAt: 0, relaunches: 0, eaSeen: 0, badToken: 0, mt5Up: false, wasConn: false, owner: null };
 
 const log = (...a) => console.log(new Date().toLocaleTimeString(), ...a);
 function addFeed(k, text, side = '', lots = 0, price = 0, profit = 0) {
@@ -111,6 +111,7 @@ function sync(r) {
   L.sym = r.sym || L.sym; L.tf = r.tf || L.tf;
   L.bid = +r.bid || 0; L.ask = +r.ask || 0; L.bal = +r.bal || 0; L.eq = +r.eq || 0; L.spread = +r.spread || 0;
   L.hedge = r.hedge !== false;
+  L.at = r.at !== false;
   L.pos = Array.isArray(r.pos) ? r.pos : [];
   const out = { cmds: [], run: L.running };
   if (L.killPending) { out.cmds.push({ a: 'closeall' }); L.killPending = false; return out; }
@@ -127,7 +128,8 @@ function sync(r) {
   try { sig = evalStrategy(candles, S.strategy); } catch (e) { L.err = 'Engine error: ' + e.message; return out; }
   if (sig.error) { L.err = sig.error; return out; }
   L.err = '';
-  if (S.sig.mode === 'off' || S.sig.both) decide(sig, out.cmds); // while Signals is on, the strategy stays quiet unless you chose both
+  L.evalAt = Date.now();
+  decide(sig, out.cmds); // the loaded strategy always trades; the Signals feature queues its own orders separately
   return out;
 }
 
@@ -185,7 +187,7 @@ function eaEvent(e) {
 
 // ---------- app API ----------
 function setRunning(on) {
-  L.running = !!on; if (on) { L.err = ''; L.lastBarT = 0; }
+  L.running = !!on; if (on) { L.err = ''; L.lastBarT = 0; L.evalAt = 0; }
   addFeed('sys', on ? 'Bot started' : 'Bot stopped');
 }
 function status() {
@@ -194,7 +196,9 @@ function status() {
   return {
     run: L.running, conn: L.lastSync > 0 && now - L.lastSync < 6000, age: L.lastSync ? Math.round((now - L.lastSync) / 1000) : -1,
     sym: L.sym, tf: L.tf, bid: L.bid, ask: L.ask, bal: L.bal, eq: L.eq, spread: L.spread, hedge: L.hedge, pos: L.pos,
-    dayPnl: +S.dayPnl.toFixed(2), dayTrades: S.dayTrades, wins: S.wins, losses: S.losses, signal: L.signal, err: L.err,
+    evalAge: L.evalAt ? Math.round((now - L.evalAt) / 1000) : -1,
+    dayPnl: +S.dayPnl.toFixed(2), dayTrades: S.dayTrades, wins: S.wins, losses: S.losses, signal: L.signal,
+    err: L.err || (L.running && L.lastSync > 0 && now - L.lastSync < 6000 && L.at === false ? 'AutoTrading is OFF in MT5. On the VPS, click the Algo Trading button so it turns green.' : ''),
     strategy: S.strategy ? S.strategy.name : '', rev: S.rev,
     info: { login: S.login, server: S.server, hasPw: S.hasPw, symbol: S.symbol, tf: S.tf, allowLive: !!cfg.allowLive, mt5Ready: !!cfg.mt5Path && !!cfg.mt5DataDir, portable: !!cfg.portable },
     cfg: S.guards,
@@ -227,7 +231,7 @@ function patchCommon() {
     const f = path.join(cfg.mt5DataDir, 'config', 'common.ini');
     fs.mkdirSync(path.dirname(f), { recursive: true });
     const cur = fs.existsSync(f) ? fs.readFileSync(f) : Buffer.alloc(0);
-    fs.writeFileSync(f, patchSection(cur, 'Experts', { Enabled: 1, AllowLiveTrading: 1, WebRequest: 1, WebRequestUrl: allowList() }));
+    fs.writeFileSync(f, patchSection(cur, 'Experts', { Enabled: 1, AllowLiveTrading: 1, Account: 0, Profile: 0, WebRequest: 1, WebRequestUrl: allowList() }));
   } catch (e) { log('Could not update MT5 settings:', e.message); }
 }
 

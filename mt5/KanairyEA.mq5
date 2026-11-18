@@ -243,12 +243,13 @@ string BarsJson(datetime &lastClosed)
 void Sync()
 {
    bool hedge = AccountInfoInteger(ACCOUNT_MARGIN_MODE) == ACCOUNT_MARGIN_MODE_RETAIL_HEDGING;
-   string body = StringFormat("{\"sym\":\"%s\",\"tf\":\"%s\",\"bid\":%s,\"ask\":%s,\"bal\":%.2f,\"eq\":%.2f,\"spread\":%d,\"hedge\":%s,\"cid\":\"%I64d\",\"pos\":%s",
+   string body = StringFormat("{\"sym\":\"%s\",\"tf\":\"%s\",\"bid\":%s,\"ask\":%s,\"bal\":%.2f,\"eq\":%.2f,\"spread\":%d,\"hedge\":%s,\"cid\":\"%I64d\",\"at\":%s,\"pos\":%s",
                               _Symbol, PeriodText(),
                               DoubleToString(SymbolInfoDouble(_Symbol, SYMBOL_BID), _Digits),
                               DoubleToString(SymbolInfoDouble(_Symbol, SYMBOL_ASK), _Digits),
                               AccountInfoDouble(ACCOUNT_BALANCE), AccountInfoDouble(ACCOUNT_EQUITY),
-                              (int)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD), hedge ? "true" : "false", (long)ChartID(), PositionsJson());
+                              (int)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD), hedge ? "true" : "false", (long)ChartID(),
+                              (TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) && MQLInfoInteger(MQL_TRADE_ALLOWED)) ? "true" : "false", PositionsJson());
    datetime lastClosed = 0;
    datetime curBar = iTime(_Symbol, _Period, 1);
    bool sendBars = (curBar != 0 && curBar != g_lastBarSent);
@@ -274,6 +275,8 @@ void Sync()
    bool run = StringFind(reply, "\"run\":true") >= 0;
    if(StringFind(reply, "\"want\":true") >= 0) g_lastBarSent = 0;   // app asked for fresh candles
    g_status = run ? "running" : "connected, waiting for Start";
+   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || !MQLInfoInteger(MQL_TRADE_ALLOWED))
+      g_status = "AutoTrading is OFF - click the Algo Trading button so it turns green";
    RunCommands(reply);
 }
 
